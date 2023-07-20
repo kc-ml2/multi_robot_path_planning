@@ -1,4 +1,7 @@
 # multi_robot_path_planning
+
+This branch is for producing tree architecture file output and documentation
+
 ## Installation
 
 ```bash
