@@ -539,6 +539,7 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve(const base::PlannerTer
     robot.rstate = robot.rmotion->state;
     robot.xstate = si_->allocState();
 
+
     if (bestGoalMotion_)
         OMPL_INFORM("%s: Starting planning with existing solution of cost %.5f", getName().c_str(),
                     bestCost_.value());

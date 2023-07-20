@@ -41,3 +41,63 @@ make
 
 pnmtopng result_demo.ppm > result.png
 ```
+
+## Text format of tree architecture
+
+Node json type 1
+
+```json
+{
+	"index" : 0   # 0 : root node, index = 1, 2, ...
+	"parent": 0, 
+ 	"state": {
+		"x": 0,
+		"y": 0,
+		"z": 0
+	},
+	"costs": 0.0,
+	"timestamp": 0, # Increase in the order in which it was created -> 1, 2, ...
+	... (add required variables)
+}
+```
+
+Node json type 2
+
+```json
+{
+	"index" : 0   # 0 : root node, index = 1, 2, ...
+	"parent": 0, 
+ 	"state": [0.0, 0.0, 0.0], #x, y, z
+	"costs": 0.0,
+	"timestamp": 0, # Increase in the order in which it was created -> 1, 2, ...
+	... (add required variables)
+}
+```
+
+Node array of each robot
+
+```json
+{
+	"robot_id": 0,
+	"history":[
+		{Node Json},
+		{Node Json},
+		...
+	],
+	"trees":[   #result tree
+		{
+			"parent": -1,  #root node
+			"state": [0.0, 0.0, 0.0], #x, y, z
+			"cost": 0.0,
+			"children": [1, 2], #index of children trees
+		}, 
+		{
+			"parent": 0,
+			"state": [0.0, 0.0, 0.0], #x, y, z
+			"cost": 0.0,
+			"children": [4], #index of children trees
+		},
+		...
+	]
+}
+```
