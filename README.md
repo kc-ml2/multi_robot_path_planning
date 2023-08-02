@@ -4,6 +4,47 @@ This branch is for producing tree architecture file output and documentation
 Notion documentation site is bellow
 https://dog-ferry-0ea.notion.site/OMPL-Documentation-8e67b036da4c477ba80c19bdef9e972e?pvs=4
 
+# Installing and configuring OMPL
+
+### Installation OMPL
+
+```bash
+
+#install wget 
+sudo apt install wget
+
+# download ompl shell script
+wget https://ompl.kavrakilab.org/install-ompl-ubuntu.sh
+
+#change file authority
+chmod u+x install-ompl-ubuntu.sh
+
+#run shell script with OMPL.app and python binding (maybe full packages)
+./install-ompl-ubuntu.sh --app
+```
+
+### Build from source (to modify source code)
+
+- Clone OMPL git repo
+    - git clone https://github.com/ompl/ompl.git
+- Dependencies install
+    - Boost (version 1.58 or higher)
+    - CMake (version 3.5 or higher)
+    - Eigen (verison 3.3 or higher)
+- Build OMPL source
+
+```bash
+mkdir -p build/Release
+cd build/Release
+cmake ../..
+
+make -j 4 update_bindings # if 
+```
+
+---
+
+# OMPL dev
+
 ## Installation
 
 ```bash
@@ -44,31 +85,21 @@ make
 pnmtopng result_demo.ppm > result.png
 ```
 
+---
+
 ## Text format of tree architecture
 
-Node json type 1
+Node json type
+
+- to change parent architecture
 
 ```json
 {
 	"index" : 0   # 0 : root node, index = 1, 2, ...
-	"parent": 0, 
- 	"state": {
-		"x": 0,
-		"y": 0,
-		"z": 0
-	},
-	"costs": 0.0,
-	"timestamp": 0, # Increase in the order in which it was created -> 1, 2, ...
-	... (add required variables)
-}
-```
-
-Node json type 2
-
-```json
-{
-	"index" : 0   # 0 : root node, index = 1, 2, ...
-	"parent": 0, 
+	"parent": {
+		"value":[ 0.0, 0.0, 0.0] #x, y, z
+		"index": 0
+	}, 
  	"state": [0.0, 0.0, 0.0], #x, y, z
 	"costs": 0.0,
 	"timestamp": 0, # Increase in the order in which it was created -> 1, 2, ...
@@ -78,6 +109,8 @@ Node json type 2
 
 Node array of each robot
 
+- Erase trees → add next time…
+
 ```json
 {
 	"robot_id": 0,
@@ -86,20 +119,33 @@ Node array of each robot
 		{Node Json},
 		...
 	],
-	"trees":[   #result tree
+}
+```
+
+## Full json code
+
+- erase map_file → cannot get filename in RRTStar.cpp
+
+```json
+{
+	"data":[
 		{
-			"parent": -1,  #root node
-			"state": [0.0, 0.0, 0.0], #x, y, z
-			"cost": 0.0,
-			"children": [1, 2], #index of children trees
-		}, 
+			"robot_id": 0,
+			"history":[
+				{Node Json},
+				{Node Json},
+				...
+			],
+		}
 		{
-			"parent": 0,
-			"state": [0.0, 0.0, 0.0], #x, y, z
-			"cost": 0.0,
-			"children": [4], #index of children trees
+			"robot_id": 1,
+			"history":[
+				{Node Json},
+				{Node Json},
+				...
+			],
 		},
 		...
-	]
+	],
 }
 ```
