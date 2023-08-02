@@ -1,6 +1,8 @@
 # multi_robot_path_planning
 
 This branch is for producing tree architecture file output and documentation
+Notion documentation site is bellow
+https://dog-ferry-0ea.notion.site/OMPL-Documentation-8e67b036da4c477ba80c19bdef9e972e?pvs=4
 
 ## Installation
 
