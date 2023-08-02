@@ -15,6 +15,7 @@ find_package(Boost COMPONENTS system REQUIRED)
 include_directories(${OMPL_INCLUDE_DIRS})
 include_directories(${Boost_INCLUDE_DIRS})
 include_directories(algorithm/include)
+include_directories(include)
 
 add_executable (ompl_app
   src/Point2DPlanning.cpp
@@ -22,7 +23,18 @@ add_executable (ompl_app
   algorithm/Planner.cpp
 )
 
+
+
 target_link_libraries(ompl_app
+  ${OMPL_LIBRARIES}
+  ${Boost_FILESYSTEM_LIBRARY}
+)
+
+add_executable( test_app
+src/test.cpp
+)
+
+target_link_libraries(test_app
   ${OMPL_LIBRARIES}
   ${Boost_FILESYSTEM_LIBRARY}
 )

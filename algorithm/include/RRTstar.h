@@ -38,8 +38,16 @@
 #define OMPL_GEOMETRIC_PLANNERS_RRT_RRTSTAR_
 
 #include "PlannerIncludes.h"
+//#include "ompl/geometric/planners/PlannerIncludes.h"
 #include "ompl/base/OptimizationObjective.h"
 #include "ompl/datastructures/NearestNeighbors.h"
+
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/prettywriter.h"
+#include "rapidjson/pointer.h"
+#include "rapidjson/rapidjson.h"
 
 #include <limits>
 #include <vector>
@@ -383,13 +391,16 @@ namespace ompl
             public:
            
                 LoopVariables() : approxGoalMotion(nullptr),
-                rewireTest(0), statesGenerated(0)
+                rewireTest(0), statesGenerated(0), index(0)
                 {
                     approxDist = std::numeric_limits<double>::infinity();
                     //compareFn = new CostIndexCompare(costs, opt);
+
                 }
 
-                ~LoopVariables(){}
+                ~LoopVariables(){
+                    histories = nullptr;
+                }
 
                 Motion *approxGoalMotion;
                 double approxDist;
@@ -417,7 +428,41 @@ namespace ompl
                 std::vector<std::size_t> sortedCostIndices;
 
                 std::vector<int> valid;
+
+                int index;
+
+                std::shared_ptr<NearestNeighbors<Motion *>> nn;
+
+                Motion *bestGoalMotion{nullptr};
+                std::vector<Motion *> goalMotions;
+
+
+                /** \brief Stores the start states as Motions. */
+                std::vector<Motion *> startMotions;
+
+                /** \brief Best cost found so far by algorithm */
+                base::Cost bestCost{std::numeric_limits<double>::quiet_NaN()};
+
+                /** \brief The cost at which the graph was last pruned */
+                base::Cost prunedCost{std::numeric_limits<double>::quiet_NaN()};
+
+                /*
+                bestGoalMotion = nullptr;
+                goalMotions.clear();
+                startMotions.clear();
+
+                bestCost = base::Cost(std::numeric_limits<double>::quiet_NaN());
+                prunedCost = base::Cost(std::numeric_limits<double>::quiet_NaN());
+                prunedMeasure = 0.0;
+                */
+
+               ompl::base::ProblemDefinitionPtr pdef;
+               rapidjson::Value* histories{nullptr};
+
+               int iterations{0};
             };
+
+            rapidjson::Document d_;
 
             std::vector<ompl::base::ProblemDefinitionPtr> v_pdef_;
             
@@ -568,9 +613,13 @@ namespace ompl
                 return std::to_string(bestCost().value());
             }
 
+            //CJH added ...
+            bool allowSaving;
+            std::string fileName_{"rrt.json"};
+
         public:
             //CJH Added ...
-            int solve_loop(LoopVariables& lv);
+            int solve_loop(LoopVariables& lv, std::vector<LoopVariables> robots);
         };
     }
 }

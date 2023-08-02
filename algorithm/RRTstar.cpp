@@ -48,6 +48,12 @@
 #include "ompl/base/samplers/informed/OrderedInfSampler.h"
 #include "ompl/tools/config/SelfConfig.h"
 #include "ompl/util/GeometricEquations.h"
+#include <ompl/base/spaces/RealVectorStateSpace.h>
+
+
+#include <fstream>
+
+using namespace rapidjson;
 
 ompl::geometric::RRTstar::RRTstar(const base::SpaceInformationPtr &si)
   : base::Planner(si, "RRTstar")
@@ -84,6 +90,10 @@ ompl::geometric::RRTstar::RRTstar(const base::SpaceInformationPtr &si)
 
     addPlannerProgressProperty("iterations INTEGER", [this] { return numIterationsProperty(); });
     addPlannerProgressProperty("best cost REAL", [this] { return bestCostProperty(); });
+
+    allowSaving = true;
+    d_.SetObject();
+
 }
 
 ompl::geometric::RRTstar::~RRTstar()
@@ -163,9 +173,10 @@ void ompl::geometric::RRTstar::clear()
 }
 
 //return 1: successfully return, -1: error, 0: continue
-int ompl::geometric::RRTstar::solve_loop(LoopVariables& lv, vector<Robots>& robots)
+int ompl::geometric::RRTstar::solve_loop(LoopVariables& lv, std::vector<LoopVariables> robots)
 {
     iterations_++;
+    lv.iterations++;
     
     //initialize variables
     auto goal_s = dynamic_cast<base::GoalSampleableRegion *>(lv.goal);
@@ -175,7 +186,7 @@ int ompl::geometric::RRTstar::solve_loop(LoopVariables& lv, vector<Robots>& robo
     // sample random state (with goal biasing)
     // Goal samples are only sampled until maxSampleCount() goals are in the tree, to prohibit duplicate goal
     // states.
-    if (goal_s && goalMotions_.size() < goal_s->maxSampleCount() && rng_.uniform01() < goalBias_ &&
+    if (goal_s && lv.goalMotions.size() < goal_s->maxSampleCount() && rng_.uniform01() < goalBias_ &&
         goal_s->canSample())
         goal_s->sampleGoal(lv.rstate);
     else
@@ -187,8 +198,7 @@ int ompl::geometric::RRTstar::solve_loop(LoopVariables& lv, vector<Robots>& robo
     }
 
     // find closest state in the tree
-    Motion *nmotion = nn_->nearest(lv.rmotion);
-
+    Motion *nmotion = lv.nn->nearest(lv.rmotion);
     if (lv.intermediateSolutionCallback && si_->equalStates(nmotion->state, lv.rstate))
         return 0;
 
@@ -318,7 +328,7 @@ int ompl::geometric::RRTstar::solve_loop(LoopVariables& lv, vector<Robots>& robo
         {
             if (opt_->isCostBetterThan(solutionHeuristic(motion), bestCost_))
             {
-                nn_->add(motion);
+                lv.nn->add(motion);
                 motion->parent->children.push_back(motion);
             }
             else  // If the new motion does not improve the best cost it is ignored.
@@ -331,7 +341,7 @@ int ompl::geometric::RRTstar::solve_loop(LoopVariables& lv, vector<Robots>& robo
         else
         {
             // add motion to the tree
-            nn_->add(motion);
+            lv.nn->add(motion);
             motion->parent->children.push_back(motion);
         }
 
@@ -385,7 +395,7 @@ int ompl::geometric::RRTstar::solve_loop(LoopVariables& lv, vector<Robots>& robo
         if (lv.goal->isSatisfied(motion->state, &distanceFromGoal))
         {
             motion->inGoal = true;
-            goalMotions_.push_back(motion);
+            lv.goalMotions.push_back(motion);
             checkForSolution = true;
         }
 
@@ -393,33 +403,34 @@ int ompl::geometric::RRTstar::solve_loop(LoopVariables& lv, vector<Robots>& robo
         if (checkForSolution)
         {
             bool updatedSolution = false;
-            if (!bestGoalMotion_ && !goalMotions_.empty())
+            if (!lv.bestGoalMotion && !lv.goalMotions.empty())
             {
                 // We have found our first solution, store it as the best. We only add one
                 // vertex at a time, so there can only be one goal vertex at this moment.
-                bestGoalMotion_ = goalMotions_.front();
-                bestCost_ = bestGoalMotion_->cost;
+                lv.bestGoalMotion = lv.goalMotions.front();
+                lv.bestCost = lv.bestGoalMotion->cost;
                 updatedSolution = true;
 
                 OMPL_INFORM("%s: Found an initial solution with a cost of %.2f in %u iterations (%u "
-                            "vertices in the graph)",
-                            getName().c_str(), bestCost_.value(), iterations_, nn_->size());
+                            "vertices in the graph) in %d",
+                            getName().c_str(), lv.bestCost.value(), lv.iterations, lv.nn->size(), lv.index);
+                            //getName().c_str(), lv.bestCost.value(), iterations_, lv.nn->size(), lv.index);
             }
             else
             {
                 // We already have a solution, iterate through the list of goal vertices
                 // and see if there's any improvement.
-                for (auto &goalMotion : goalMotions_)
+                for (auto &goalMotion : lv.goalMotions)
                 {
                     // Is this goal motion better than the (current) best?
-                    if (opt_->isCostBetterThan(goalMotion->cost, bestCost_))
+                    if (opt_->isCostBetterThan(goalMotion->cost, lv.bestCost))
                     {
-                        bestGoalMotion_ = goalMotion;
-                        bestCost_ = bestGoalMotion_->cost;
+                        lv.bestGoalMotion = goalMotion;
+                        lv.bestCost = lv.bestGoalMotion->cost;
                         updatedSolution = true;
 
                         // Check if it satisfies the optimization objective, if it does, break the for loop
-                        if (opt_->isSatisfied(bestCost_))
+                        if (opt_->isSatisfied(lv.bestCost))
                         {
                             break;
                         }
@@ -431,14 +442,14 @@ int ompl::geometric::RRTstar::solve_loop(LoopVariables& lv, vector<Robots>& robo
             {
                 if (useTreePruning_)
                 {
-                    pruneTree(bestCost_);
+                    pruneTree(lv.bestCost);
                 }
 
                 if (lv.intermediateSolutionCallback)
                 {
                     std::vector<const base::State *> spath;
                     Motion *intermediate_solution =
-                        bestGoalMotion_->parent;  // Do not include goal state to simplify code.
+                        lv.bestGoalMotion->parent;  // Do not include goal state to simplify code.
 
                     // Push back until we find the start, but not the start itself
                     while (intermediate_solution->parent != nullptr)
@@ -447,24 +458,107 @@ int ompl::geometric::RRTstar::solve_loop(LoopVariables& lv, vector<Robots>& robo
                         intermediate_solution = intermediate_solution->parent;
                     }
 
-                    lv.intermediateSolutionCallback(this, spath, bestCost_);
+                    lv.intermediateSolutionCallback(this, spath, lv.bestCost);
                 }
             }
         }
 
         // Checking for approximate solution (closest state found to the goal)
-        if (goalMotions_.size() == 0 && distanceFromGoal < lv.approxDist)
+        if (lv.goalMotions.size() == 0 && distanceFromGoal < lv.approxDist)
         {
             lv.approxGoalMotion = motion;
             lv.approxDist = distanceFromGoal;
         }
+   
+
+        //making json data like LOG funciton
+        Value history(kObjectType);
+
+        //Node json
+        //Value p_state(kArrayType);
+        
+        double* pnt = motion->parent->state->as<ompl::base::RealVectorStateSpace::StateType>()->values;
+        //double y = motion->parent->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1];
+        //double z = motion->parent->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2];
+
+        
+
+        //Parent index matcher
+        Value p_state(kObjectType);
+        Value p_pnt(kArrayType);
+        p_pnt.PushBack(pnt[0], d_.GetAllocator());
+        p_pnt.PushBack(pnt[1], d_.GetAllocator());
+        p_pnt.PushBack(pnt[2], d_.GetAllocator());
+        p_state.AddMember("value", p_pnt, d_.GetAllocator());
+
+
+        int p_index = -1;
+        for (int i =  0; i < lv.histories->Size(); i++)
+        {
+            bool isMatched = true;
+            auto& history = lv.histories->GetArray()[i];
+            for (int j = 0; j < history["state"].Size(); j++){
+                if(history["state"][j].GetDouble() != pnt[j]) {
+                    isMatched = false;
+                    break;
+                }
+            }
+
+            if(isMatched){
+                p_index = i;
+                break;
+            }
+        }
+        p_state.AddMember("index", p_index, d_.GetAllocator());
+
+
+        history.AddMember("parent", p_state, d_.GetAllocator());
+
+/*
+        int parent_index = -1;
+        for (auto& history : lv.histories.GetArray()){
+            parent_index++;
+            for (auto& s : history["state"].GetArray()){
+                //match values
+                if(pnt ==)
+                std::cout<<w.GetDouble()<<std::endl;
+            }
+        }
+            
+        std::cout<<lv.histories->Size()<<std::endl;
+      
+
+
+        p_state.PushBack(x, d_.GetAllocator());
+        p_state.PushBack(y, d_.GetAllocator());
+        p_state.PushBack(z, d_.GetAllocator());
+          
+        history.AddMember("parent", p_state, d_.GetAllocator());
+        */
+
+        Value state(kArrayType);
+        double x = motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0];
+        double y = motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1];
+        double z = motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[2];
+
+        state.PushBack(x, d_.GetAllocator());
+        state.PushBack(y, d_.GetAllocator());
+        state.PushBack(z, d_.GetAllocator());
+        
+
+        history.AddMember("state", state, d_.GetAllocator());
+        history.AddMember("costs", motion->cost.value(), d_.GetAllocator());
+        history.AddMember("timestamp", lv.iterations, d_.GetAllocator());
+
+        lv.histories->PushBack(history, d_.GetAllocator());
     }
 
-    //making json data like LOG funciton
-
     // terminate if a sufficient solution is found
-    if (bestGoalMotion_ && opt_->isSatisfied(bestCost_))
+    if (lv.bestGoalMotion && opt_->isSatisfied(lv.bestCost)){
+        OMPL_INFORM("Best goal is founded: %d", lv.index);
         return 1;
+    }
+        
 
     return 0;
 }
@@ -472,26 +566,6 @@ int ompl::geometric::RRTstar::solve_loop(LoopVariables& lv, vector<Robots>& robo
 ompl::base::PlannerStatus ompl::geometric::RRTstar::solve(const base::PlannerTerminationCondition &ptc)
 {
     checkValidity();
-    
-    //For test
-    auto def = std::make_shared<base::ProblemDefinition>(si_);
-    def->setOptimizationObjective(opt_);
-    v_pdef_.push_back(def);
-    
-    ompl::base::ScopedState<> start(si_->getStateSpace());
-    start[0] = 0;
-    start[1] = 0;
-    ompl::base::ScopedState<> goal(si_->getStateSpace());
-    goal[0] = 500;
-    goal[1] = 500;
-    v_pdef_[0]->setStartAndGoalStates(start, goal);
-
-
-    LoopVariables robot;
-
-    //robot.goal = pdef_->getGoal().get();
-    robot.goal = v_pdef_[0]->getGoal().get();
-    robot.symCost = opt_->isSymmetric();
 
     // Check if there are more starts => please check add start motions
     if (pis_.haveMoreStartStates() == true)
@@ -532,12 +606,77 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve(const base::PlannerTer
                   "You may need to disable pruning or rejection.",
                   getName().c_str(), si_->getStateSpace()->getName().c_str());
 
-    //robot.intermediateSolutionCallback = pdef_->getIntermediateSolutionCallback();
-    robot.intermediateSolutionCallback = v_pdef_[0]->getIntermediateSolutionCallback();
 
-    robot.rmotion = new Motion(si_);
-    robot.rstate = robot.rmotion->state;
-    robot.xstate = si_->allocState();
+
+    int n_robot = 10;
+    std::vector<LoopVariables> robots;
+   
+    for(int i=0;i<n_robot;i++){
+        LoopVariables robot;
+        robot.index = i;
+
+        robot.pdef = std::make_shared<base::ProblemDefinition>(si_);
+        robot.pdef->setOptimizationObjective(opt_);
+        //v_pdef_.push_back(def);
+        
+        ompl::base::ScopedState<> start(si_->getStateSpace());
+        start[0] = 0;
+        start[1] = 0;
+        ompl::base::ScopedState<> goal(si_->getStateSpace());
+        goal[0] = 500;
+        goal[1] = 500;
+        //v_pdef_[i]->setStartAndGoalStates(start, goal);
+        robot.pdef->setStartAndGoalStates(start, goal);
+
+        
+        //robot initialize
+        robot.bestCost = opt_->infiniteCost();
+        robot.prunedCost = opt_->infiniteCost();
+
+        if (!robot.nn)
+            robot.nn.reset(tools::SelfConfig::getDefaultNearestNeighbors<Motion *>(this));
+        robot.nn->setDistanceFunction([this](const Motion *a, const Motion *b) { return distanceFunction(a, b); });
+
+
+        //robot.goal = pdef_->getGoal().get();
+        robot.goal = robot.pdef->getGoal().get();
+        robot.symCost = opt_->isSymmetric();
+
+        //add initialize nn
+        if(true){
+            const base::State *st = robot.pdef->getStartState(0);
+            bool bounds = si_->satisfiesBounds(st);
+            bool valid = bounds ? si_->isValid(st) : false;
+
+            auto *motion = new Motion(si_);
+            si_->copyState(motion->state, st);
+            motion->cost = opt_->identityCost();
+            robot.nn->add(motion);
+            robot.startMotions.push_back(motion);
+        }
+
+        //robot.intermediateSolutionCallback = v_pdef_[i]->getIntermediateSolutionCallback();
+        robot.intermediateSolutionCallback = robot.pdef->getIntermediateSolutionCallback();
+
+        robot.rmotion = new Motion(si_);
+        robot.rstate = robot.rmotion->state;
+        robot.xstate = si_->allocState();
+        
+        //Generate history json value -> check memory leak... TODO
+        robot.histories = new Value(kArrayType);
+
+        robots.push_back(robot);
+    }
+    
+
+
+    //robot.intermediateSolutionCallback = pdef_->getIntermediateSolutionCallback();
+
+    //robot.intermediateSolutionCallback = v_pdef_[0]->getIntermediateSolutionCallback();
+
+    //robot.rmotion = new Motion(si_);
+    //robot.rstate = robot.rmotion->state;
+    //robot.xstate = si_->allocState();
 
 
     if (bestGoalMotion_)
@@ -553,20 +692,84 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve(const base::PlannerTer
             std::min(maxDistance_, r_rrt_ * std::pow(log((double)(nn_->size() + 1u)) / ((double)(nn_->size() + 1u)),
                                                      1 / (double)(si_->getStateDimension()))));
 
+
+    //initialize json documents
+    d_.AddMember("map_file", "floor.ppm", d_.GetAllocator());
+    Value datas(kArrayType);
+
     while (ptc == false)
     {
-        int res = solve_loop(robot);
+        int res = 0;
+        for(int i=0;i<n_robot;i++){
+            res += solve_loop(robots[i], robots);
+        }
+        
         //To check collision
 
-
+        
         if(res == 0) continue;
         else if (res == 1) break;
     }
 
     OMPL_INFORM("n times calculate to get omtimized path : %d", iterations_);
 
+    for(int i=0;i<n_robot;i++){
+        Value data(kObjectType);
+        data.AddMember("robot_id", i, d_.GetAllocator());
+        data.AddMember("history", (*robots[i].histories), d_.GetAllocator());
+        datas.PushBack(data,d_.GetAllocator());
+    }
+    
+    d_.AddMember("data", datas, d_.GetAllocator());
+
+    // TODO - imsi impl
+    
+    
+    
+    /*/ NO1 data
+    Value data(kObjectType);
+    data.AddMember("robot_id", 0, d.GetAllocator());
+
+    Value histories(kArrayType);
+    Value history(kObjectType);
+
+    //Node json
+    history.AddMember("index", 0, d.GetAllocator());
+    history.AddMember("parent", 0, d.GetAllocator());
+    Value state(kArrayType);
+    state.PushBack(0.1, d.GetAllocator());
+    state.PushBack(0.2, d.GetAllocator());
+    state.PushBack(0.3, d.GetAllocator());
+
+    history.AddMember("state", state, d.GetAllocator());
+    history.AddMember("costs", 0.0, d.GetAllocator());
+    history.AddMember("timestamp", 0, d.GetAllocator());
+
+    histories.PushBack(history, d.GetAllocator());
+
+    data.AddMember("history", histories, d.GetAllocator());
+    datas.PushBack(data,d.GetAllocator());
+    //
+
+    d.AddMember("data", datas, d.GetAllocator());
+    */
+
+    // Convert JSON document to string
+    rapidjson::StringBuffer strbuf;
+    rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(strbuf);
+    d_.Accept(writer);
+
+    std::ofstream writeFile(fileName_.data());
+    if(writeFile.is_open()){
+        writeFile << strbuf.GetString() << std::endl;
+        writeFile.close();
+    }
+
+
     // Add our solution (if it exists)
     Motion *newSolution = nullptr;
+    /*
+
     if (bestGoalMotion_)
     {
         // We have an exact solution
@@ -620,7 +823,7 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve(const base::PlannerTer
     OMPL_INFORM("%s: Created %u new states. Checked %u rewire options. %u goal states in tree. Final solution cost "
                 "%.3f",
                 getName().c_str(), robot.statesGenerated, robot.rewireTest, goalMotions_.size(), bestCost_.value());
-
+    */
     // We've added a solution if newSolution == true, and it is an approximate solution if bestGoalMotion_ == false
     return {newSolution != nullptr, bestGoalMotion_ == nullptr};
 }

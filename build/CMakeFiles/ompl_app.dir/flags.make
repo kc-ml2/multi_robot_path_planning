@@ -6,5 +6,5 @@ CXX_FLAGS =
 
 CXX_DEFINES = 
 
-CXX_INCLUDES = -I/opt/ros/galactic/include/ompl-1.5 -I/usr/include/eigen3 -I/home/irms/dev/rrt_dev/ompl_test/algorithm/include 
+CXX_INCLUDES = -I/opt/ros/galactic/include/ompl-1.5 -I/usr/include/eigen3 -I/home/irms/dev/rrt_dev/multi_robot_path_planning/algorithm/include -I/home/irms/dev/rrt_dev/multi_robot_path_planning/include 
 

@@ -1,4 +1,4 @@
-# Install script for directory: /home/irms/dev/rrt_dev/ompl_test
+# Install script for directory: /home/irms/dev/rrt_dev/multi_robot_path_planning
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/irms/dev/rrt_dev/ompl_test/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/irms/dev/rrt_dev/multi_robot_path_planning/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

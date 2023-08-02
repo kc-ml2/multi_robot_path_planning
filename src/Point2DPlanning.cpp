@@ -109,8 +109,8 @@ public:
         ss_->setStartAndGoalStates(start, goal);
 
         // generate a few solutions; all will be added to the goal;
-        for (int i = 0; i < 10; ++i)
-        //for (int i = 0; i < 1; ++i)
+        //for (int i = 0; i < 10; ++i)
+        for (int i = 0; i < 1; ++i)
         {
             if (ss_->getPlanner())
                 ss_->getPlanner()->clear();
@@ -201,14 +201,14 @@ int main(int argc, char ** argv)
         path = new boost::filesystem::path(argv[1]);
     }
     else{
-        path = new boost::filesystem::path("/home/irms/dev/rrt_dev/ompl_test/resources/ppm/floor.ppm");
+        path = new boost::filesystem::path("/home/irms/dev/rrt_dev/multi_robot_path_planning/resources/ppm/floor.ppm");
     }
     bool useDeterministicSampling = true;
 
-    std::cout<<path->string().c_str()<<std::endl;
     Plane2DEnvironment env(path->string().c_str(), useDeterministicSampling);
 
-    if (env.plan(516, 438, 1293, 1122))
+    //if (env.plan(516, 438, 1293, 1122))
+    if (env.plan(0, 0, 500, 500))
     {
         env.recordSolution();
         env.save("result_demo.ppm");
