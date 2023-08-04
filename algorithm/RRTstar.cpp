@@ -610,10 +610,10 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve(const base::PlannerTer
 
 
     // Please change here when the start and goal position change.
-    std::vector<std::vector<int>> start { {0, 0}, {200, 200}, {500, 500}, {500,500}, {300, 0}};
-    std::vector<std::vector<int>> end { {500, 500}, {500, 500}, {0, 0}, {0,0}, {300, 0}};
-
-    int n_robot = start.size();
+    std::vector<std::vector<int>> p_start { {229, 109}, {253, 762}, {401, 1288}, {910,1405}, {1561, 1131}, {1537, 651}, {1625, 54}, {360, 543}};
+    std::vector<std::vector<int>> p_end { {253, 762}, {401, 1288}, {910,1405}, {1561, 1131}, {1537, 651}, {1625, 54}, {360, 543}, {229, 109}};
+   
+    int n_robot = p_start.size();
     std::vector<LoopVariables> robots;
    
     for(int i=0;i<n_robot;i++){
@@ -625,11 +625,11 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve(const base::PlannerTer
         //v_pdef_.push_back(def);
         
         ompl::base::ScopedState<> start(si_->getStateSpace());
-        start[0] = 0;
-        start[1] = 0;
+        start[0] = p_start[i][0];
+        start[1] = p_start[i][1];
         ompl::base::ScopedState<> goal(si_->getStateSpace());
-        goal[0] = 500;
-        goal[1] = 500;
+        goal[0] = p_end[i][0];
+        goal[1] = p_end[i][1];;
         //v_pdef_[i]->setStartAndGoalStates(start, goal);
         robot.pdef->setStartAndGoalStates(start, goal);
 
