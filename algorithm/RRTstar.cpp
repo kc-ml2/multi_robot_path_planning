@@ -514,7 +514,7 @@ int ompl::geometric::RRTstar::solve_loop(LoopVariables& lv, std::vector<LoopVari
 
         history.AddMember("parent", p_state, d_.GetAllocator());
 
-/*
+        /*
         int parent_index = -1;
         for (auto& history : lv.histories.GetArray()){
             parent_index++;
@@ -608,7 +608,12 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve(const base::PlannerTer
 
 
 
-    int n_robot = 10;
+
+    // Please change here when the start and goal position change.
+    std::vector<std::vector<int>> start { {0, 0}, {200, 200}, {500, 500}, {500,500}, {300, 0}};
+    std::vector<std::vector<int>> end { {500, 500}, {500, 500}, {0, 0}, {0,0}, {300, 0}};
+
+    int n_robot = start.size();
     std::vector<LoopVariables> robots;
    
     for(int i=0;i<n_robot;i++){
