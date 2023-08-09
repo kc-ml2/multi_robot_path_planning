@@ -60,6 +60,13 @@
 #include "ompl/util/GeometricEquations.h"
 #include "ompl/base/PlannerTerminationCondition.h"
 
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/prettywriter.h"
+#include "rapidjson/pointer.h"
+#include "rapidjson/rapidjson.h"
+
 
 namespace ompl
 {

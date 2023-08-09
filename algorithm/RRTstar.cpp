@@ -40,6 +40,8 @@
 #include <limits>
 #include <vector>
 
+#include <ompl/base/spaces/RealVectorStateSpace.h>
+
 
 ompl::geometric::RRTstar::RRTstar(const base::SpaceInformationPtr &si)
   : base::Planner(si, "RRTstar")
@@ -300,6 +302,16 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
         dstate = lv.xstate;
     }
 
+    //LoG
+    /*double* pnt = nmotion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values;
+    double* pnt2 = dstate->as<ompl::base::RealVectorStateSpace::StateType>()->values;
+    bool check = si_->checkMotion(nmotion->state, dstate);
+
+    OMPL_INFORM("%d iteration First motion state: %f, %f, %f", iterations_, pnt[0], pnt[1], pnt[2]);
+    OMPL_INFORM("%d iteration dstate %d : %f, %f, %f", iterations_, pnt2[0], pnt2[1], pnt2[2], check);
+    */
+
+
     // Check if the motion between the nearest state and the state to add is valid
     if (si_->checkMotion(nmotion->state, dstate))
     {
@@ -314,7 +326,10 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
         getNeighbors(motion, lv.nbh);
 
         lv.rewireTest += lv.nbh.size();
+
+        //CJH inform .. Node number -> lv.stateGenerated.
         ++lv.statesGenerated;
+
 
         // cache for distance computations
         //
