@@ -37,7 +37,9 @@
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 #include <ompl/geometric/SimpleSetup.h>
 //#include <ompl/geometric/planners/rrt/RRTstar.h>
-#include "RRTstar.h"
+//#include "RRTstar.h"
+#include "mRRT.h"
+
 #include <ompl/geometric/planners/rrt/RRTConnect.h>
 #include <ompl/geometric/planners/prm/PRMstar.h>
 
@@ -88,7 +90,8 @@ public:
             {
                 // PRMstar can use the deterministic sampling
                 //ss_->setPlanner(std::make_shared<og::PRMstar>(ss_->getSpaceInformation()));
-                ss_->setPlanner(std::make_shared<og::RRTstar>(ss_->getSpaceInformation()));
+                //ss_->setPlanner(std::make_shared<og::RRTstar>(ss_->getSpaceInformation()));
+                ss_->setPlanner(std::make_shared<og::mRRT>(ss_->getSpaceInformation()));
                 space->setStateSamplerAllocator(std::bind(&Plane2DEnvironment::allocateHaltonStateSamplerRealVector,
                                                           this, std::placeholders::_1, 2,
                                                           std::vector<unsigned int>{2, 3}));
@@ -114,10 +117,10 @@ public:
         {
             if (ss_->getPlanner())
                 ss_->getPlanner()->clear();
-            ss_->solve();
+            ss_->solve(30.0);
         }
         const std::size_t ns = ss_->getProblemDefinition()->getSolutionCount();
-        OMPL_INFORM("Found %d solutions", (int)ns);
+        //OMPL_INFORM("Found %d solutions", (int)ns);
         if (ss_->haveSolutionPath())
         {
             if (!useDeterministicSampling_)
@@ -208,7 +211,7 @@ int main(int argc, char ** argv)
     Plane2DEnvironment env(path->string().c_str(), useDeterministicSampling);
 
     //if (env.plan(516, 438, 1293, 1122))
-    if (env.plan(0, 0, 500, 500))
+    if (env.plan(516, 438, 500, 500))
     {
         env.recordSolution();
         env.save("result_demo.ppm");

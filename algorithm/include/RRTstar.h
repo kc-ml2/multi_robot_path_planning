@@ -38,16 +38,8 @@
 #define OMPL_GEOMETRIC_PLANNERS_RRT_RRTSTAR_
 
 #include "PlannerIncludes.h"
-//#include "ompl/geometric/planners/PlannerIncludes.h"
 #include "ompl/base/OptimizationObjective.h"
 #include "ompl/datastructures/NearestNeighbors.h"
-
-#include "rapidjson/document.h"
-#include "rapidjson/writer.h"
-#include "rapidjson/stringbuffer.h"
-#include "rapidjson/prettywriter.h"
-#include "rapidjson/pointer.h"
-#include "rapidjson/rapidjson.h"
 
 #include <limits>
 #include <vector>
@@ -55,6 +47,19 @@
 #include <deque>
 #include <utility>
 #include <list>
+
+
+#include "ompl/base/Goal.h"
+#include "ompl/base/goals/GoalSampleableRegion.h"
+#include "ompl/base/goals/GoalState.h"
+#include "ompl/base/objectives/PathLengthOptimizationObjective.h"
+#include "ompl/base/samplers/InformedStateSampler.h"
+#include "ompl/base/samplers/informed/RejectionInfSampler.h"
+#include "ompl/base/samplers/informed/OrderedInfSampler.h"
+#include "ompl/tools/config/SelfConfig.h"
+#include "ompl/util/GeometricEquations.h"
+#include "ompl/base/PlannerTerminationCondition.h"
+
 
 namespace ompl
 {
@@ -84,15 +89,15 @@ namespace ompl
         public:
             RRTstar(const base::SpaceInformationPtr &si);
 
-            ~RRTstar() override;
+            ~RRTstar();
 
-            void getPlannerData(base::PlannerData &data) const override;
+            void getPlannerData(base::PlannerData &data) const;
 
-            base::PlannerStatus solve(const base::PlannerTerminationCondition &ptc) override;
+            base::PlannerStatus solve(const base::PlannerTerminationCondition &ptc);
 
-            void clear() override;
+            void clear();
 
-            void setup() override;
+            void setup();
 
             /** \brief Set the goal bias
 
@@ -369,11 +374,20 @@ namespace ompl
                 std::vector<Motion *> children;
             };
 
+            /** \brief Create the samplers */
+            void allocSampler();
+
+            /** \brief Generate a sample */
+            bool sampleUniform(base::State *statePtr);
+
+            /** \brief Free the memory allocated by this planner */
+            void freeMemory();
+
             // For sorting a list of costs and getting only their sorted indices
             struct CostIndexCompare
             {
                 CostIndexCompare(const std::vector<base::Cost> &costs, const base::OptimizationObjective &opt)
-                : costs_(costs), opt_(opt)
+                  : costs_(costs), opt_(opt)
                 {
                 }
                 bool operator()(unsigned i, unsigned j)
@@ -383,97 +397,6 @@ namespace ompl
                 const std::vector<base::Cost> &costs_;
                 const base::OptimizationObjective &opt_;
             };
-
-            //CJH Added ...
-            /** \brief Grouping RRTstar loop variables */
-            class LoopVariables
-            {
-            public:
-           
-                LoopVariables() : approxGoalMotion(nullptr),
-                rewireTest(0), statesGenerated(0), index(0)
-                {
-                    approxDist = std::numeric_limits<double>::infinity();
-                    //compareFn = new CostIndexCompare(costs, opt);
-
-                }
-
-                ~LoopVariables(){
-                    histories = nullptr;
-                }
-
-                Motion *approxGoalMotion;
-                double approxDist;
-
-                unsigned int rewireTest;
-                unsigned int statesGenerated;
-
-                //CostIndexCompare* compareFn;
-
-                base::Goal *goal;
-                //base::GoalSampleableRegion *goal_s;
-
-                bool symCost;
-
-                base::ReportIntermediateSolutionFn intermediateSolutionCallback;
-
-                Motion *rmotion;
-                base::State *rstate;
-                base::State *xstate;
-
-                std::vector<Motion *> nbh;
-
-                std::vector<base::Cost> costs;
-                std::vector<base::Cost> incCosts;
-                std::vector<std::size_t> sortedCostIndices;
-
-                std::vector<int> valid;
-
-                int index;
-
-                std::shared_ptr<NearestNeighbors<Motion *>> nn;
-
-                Motion *bestGoalMotion{nullptr};
-                std::vector<Motion *> goalMotions;
-
-
-                /** \brief Stores the start states as Motions. */
-                std::vector<Motion *> startMotions;
-
-                /** \brief Best cost found so far by algorithm */
-                base::Cost bestCost{std::numeric_limits<double>::quiet_NaN()};
-
-                /** \brief The cost at which the graph was last pruned */
-                base::Cost prunedCost{std::numeric_limits<double>::quiet_NaN()};
-
-                /*
-                bestGoalMotion = nullptr;
-                goalMotions.clear();
-                startMotions.clear();
-
-                bestCost = base::Cost(std::numeric_limits<double>::quiet_NaN());
-                prunedCost = base::Cost(std::numeric_limits<double>::quiet_NaN());
-                prunedMeasure = 0.0;
-                */
-
-               ompl::base::ProblemDefinitionPtr pdef;
-               rapidjson::Value* histories{nullptr};
-
-               int iterations{0};
-            };
-
-            rapidjson::Document d_;
-
-            std::vector<ompl::base::ProblemDefinitionPtr> v_pdef_;
-            
-            /** \brief Create the samplers */
-            void allocSampler();
-
-            /** \brief Generate a sample */
-            bool sampleUniform(base::State *statePtr);
-
-            /** \brief Free the memory allocated by this planner */
-            void freeMemory();
 
             /** \brief Compute distance between motions (actually distance between contained states) */
             double distanceFunction(const Motion *a, const Motion *b) const
@@ -613,13 +536,54 @@ namespace ompl
                 return std::to_string(bestCost().value());
             }
 
-            //CJH added ...
-            bool allowSaving;
-            std::string fileName_{"rrt.json"};
-
+        //CJH Added ...
         public:
-            //CJH Added ...
-            int solve_loop(LoopVariables& lv, std::vector<LoopVariables> robots);
+            class LoopVariables
+            {
+            public:
+                LoopVariables(){}
+                ~LoopVariables(){}
+
+            public:
+                base::Goal *goal;
+                base::GoalSampleableRegion *goal_s;
+
+                bool symCost;
+                base::ReportIntermediateSolutionFn intermediateSolutionCallback;
+                Motion *approxGoalMotion;
+                double approxDist;
+
+                Motion *rmotion;
+                base::State *rstate;
+                base::State *xstate;
+
+                std::vector<Motion *> nbh;
+
+                std::vector<base::Cost> costs;
+                std::vector<base::Cost> incCosts;
+                std::vector<std::size_t> sortedCostIndices;
+
+                std::vector<int> valid;
+                unsigned int rewireTest;
+                unsigned int statesGenerated;
+ 
+            };
+
+            /** \brief Get the name of the planner */
+            const std::string &getName() const{
+                return name_;
+            }
+
+            /** \brief Set the name of the planner */
+            void setName(const std::string &name){
+                name_ = name;
+            }
+
+            bool solve_init(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
+            int solve_once(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
+            base::PlannerStatus solve_end(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
+
+            //LoopVariables lv;
         };
     }
 }

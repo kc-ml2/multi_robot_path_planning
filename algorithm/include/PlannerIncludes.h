@@ -38,8 +38,8 @@
 #define OMPL_GEOMETRIC_PLANNERS_PLANNER_INCLUDES_
 
 #include "Planner.h"
-#include <ompl/base/SpaceInformation.h>
-#include <ompl/geometric/PathGeometric.h>
-#include <ompl/util/RandomNumbers.h>
+#include "ompl/base/SpaceInformation.h"
+#include "ompl/geometric/PathGeometric.h"
+#include "ompl/util/RandomNumbers.h"
 
 #endif

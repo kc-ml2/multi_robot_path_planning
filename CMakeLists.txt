@@ -20,6 +20,7 @@ include_directories(include)
 add_executable (ompl_app
   src/Point2DPlanning.cpp
   algorithm/RRTstar.cpp
+  algorithm/mRRT.cpp
   algorithm/Planner.cpp
 )
 
