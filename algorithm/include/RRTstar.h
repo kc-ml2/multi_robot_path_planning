@@ -587,7 +587,7 @@ namespace ompl
             }
 
             bool solve_init(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
-            int solve_once(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
+            int solve_once(const base::PlannerTerminationCondition &ptc, LoopVariables& lv, std::vector<LoopVariables>& robots, std::vector<int> index);
             base::PlannerStatus solve_end(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
 
             //LoopVariables lv;

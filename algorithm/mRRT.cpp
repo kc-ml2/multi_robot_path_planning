@@ -97,8 +97,10 @@ ompl::base::PlannerStatus ompl::geometric::mRRT::solve(const base::PlannerTermin
 
     while (ptc == false)
     {
+        //COMMENT - please modify this index array
+        std::vector<int> index_array = {0, 1, 2, 3, 4, 5, 6, 7};
         for(int i=0;i<v_rrtStar_.size();i++){
-            auto res = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->solve_once(ptc, v_lv[i]);
+            auto res = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->solve_once(ptc, v_lv[i], v_lv, index_array);
             if(res == 1) {
                 OMPL_INFORM("Optimal path is found: %d", i);
                 break;

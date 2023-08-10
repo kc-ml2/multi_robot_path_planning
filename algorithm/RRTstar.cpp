@@ -266,7 +266,7 @@ bool ompl::geometric::RRTstar::solve_init(const base::PlannerTerminationConditio
     return true;
 }
 
-int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition &ptc , LoopVariables& lv)
+int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition &ptc, LoopVariables& lv, std::vector<LoopVariables>& robots, std::vector<int> index)
 {
     CostIndexCompare compareFn(lv.costs, *opt_);
 
