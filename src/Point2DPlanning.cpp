@@ -204,7 +204,7 @@ int main(int argc, char ** argv)
         path = new boost::filesystem::path(argv[1]);
     }
     else{
-        path = new boost::filesystem::path("/home/irms/dev/rrt_dev/multi_robot_path_planning/resources/ppm/floor.ppm");
+        path = new boost::filesystem::path("/home/alex//Documents/Planner/multi_robot_path_planning/resources/ppm/floor.ppm");
     }
     bool useDeterministicSampling = true;
 

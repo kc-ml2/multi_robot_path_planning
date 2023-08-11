@@ -18,7 +18,7 @@
 ompl::geometric::mRRT::mRRT(const base::SpaceInformationPtr &si)
   : base::Planner(si, "mRRT")
 {
-    ppm_.loadFile("/home/irms/dev/rrt_dev/multi_robot_path_planning/resources/ppm/floor.ppm");
+    ppm_.loadFile("/home/alex/Documents/Planner/multi_robot_path_planning/resources/ppm/floor.ppm");
 }
 
 ompl::geometric::mRRT::~mRRT()
@@ -94,13 +94,21 @@ ompl::base::PlannerStatus ompl::geometric::mRRT::solve(const base::PlannerTermin
 
         v_lv.push_back(lv);
     }
+    
+    //Generator
+    auto rng = std::default_random_engine {};
+    std::vector<int> index_array = {0, 1, 2, 3, 4, 5, 6, 7};
 
     while (ptc == false)
     {
-        //COMMENT - please modify this index array
-        std::vector<int> index_array = {0, 1, 2, 3, 4, 5, 6, 7};
+        //Shuffle before new iteration
+        std::shuffle(std::begin(index_array), std::end(index_array), rng);
+        std::vector<int> used_index = {};
+
         for(int i=0;i<v_rrtStar_.size();i++){
-            auto res = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->solve_once(ptc, v_lv[i], v_lv, index_array);
+            //Append current index to index list for collision checks
+            used_index.push_back(index_array[i]);
+            auto res = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->solve_once(ptc, v_lv[i], v_lv, used_index);          
             if(res == 1) {
                 OMPL_INFORM("Optimal path is found: %d", i);
                 break;
