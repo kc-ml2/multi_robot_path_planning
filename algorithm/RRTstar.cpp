@@ -285,7 +285,7 @@ bool ompl::geometric::RRTstar::solve_init(const base::PlannerTerminationConditio
 ***************************************************************************************************************/
 
 
-std::vector<std::vector<ompl::base::State>> getPathStates(ompl::geometric::RRTstar::Motion* motion, std::vector<ompl::geometric::RRTstar::LoopVariables> valid_trees) {
+std::vector<std::vector<ompl::base::State>> ompl::geometric::RRTstar::getPathStates(ompl::geometric::RRTstar::Motion* motion, std::vector<ompl::geometric::RRTstar::LoopVariables> valid_trees) {
     std::vector<std::vector<ompl::base::State>> path_states = {};
     std::vector<ompl::geometric::RRTstar::Motion*> copy_trees = {};
     for (int i=0; i<valid_trees.size(); i++) {
@@ -303,7 +303,7 @@ std::vector<std::vector<ompl::base::State>> getPathStates(ompl::geometric::RRTst
     return path_states;
 }
 
-bool colDistance(ompl::base::State rob1, ompl::base::State rob2, double col_dist) {
+bool ompl::geometric::RRTstar::colDistance(ompl::base::State rob1, ompl::base::State rob2, double col_dist) {
     ompl::base::RealVectorStateSpace space;
     double distance = space.distance(&rob1, &rob2);
 
