@@ -285,39 +285,61 @@ bool ompl::geometric::RRTstar::solve_init(const base::PlannerTerminationConditio
 ***************************************************************************************************************/
 
 
-std::vector<std::vector<ompl::base::State>> ompl::geometric::RRTstar::getPathStates(ompl::geometric::RRTstar::Motion* motion, std::vector<ompl::geometric::RRTstar::LoopVariables> valid_trees) {
-    std::vector<std::vector<ompl::base::State>> path_states = {};
+std::vector<std::vector<ompl::base::State*>> ompl::geometric::RRTstar::getPathStates(ompl::geometric::RRTstar::Motion* motion, std::vector<ompl::geometric::RRTstar::LoopVariables> valid_trees) {
+    std::vector<std::vector<ompl::base::State*>> path_states = {};
     std::vector<ompl::geometric::RRTstar::Motion*> copy_trees = {};
-    for (int i=0; i<valid_trees.size(); i++) {
-        std::vector<ompl::base::State> cur_states = {};
+    std::vector<ompl::base::State*> cur_states = {};
+    ompl::geometric::RRTstar::Motion* motion_copy = motion;
+    
+    //Iterate through paths to get history to current point for completed points (could be optimized)
+    for (int i=0; i<valid_trees.size()-1; i++) {
+        cur_states = {};
         copy_trees.push_back(valid_trees[i].rmotion);
-
-        while ( copy_trees[i]->parent != NULL ) {
-            cur_states.push_back(*copy_trees[i]->state);
+        while ( copy_trees[i] != NULL ) {
+            cur_states.push_back(copy_trees[i]->state);
             copy_trees[i] = copy_trees[i]->parent;
         }
 
         std::reverse(cur_states.begin(), cur_states.end());
         path_states.push_back(cur_states);
     }
+    
+    //Current motion (different from trees as it's not added yet)
+    cur_states = {};
+    while ( motion_copy != NULL ) {
+        cur_states.push_back(motion_copy->state);
+        motion_copy = motion_copy->parent;
+    }
+    std::reverse(cur_states.begin(), cur_states.end());
+    path_states.push_back(cur_states);
+    
     return path_states;
 }
 
-bool ompl::geometric::RRTstar::colDistance(ompl::base::State rob1, ompl::base::State rob2, double col_dist) {
-    ompl::base::RealVectorStateSpace space;
-    double distance = space.distance(&rob1, &rob2);
+bool ompl::geometric::RRTstar::colDistance(ompl::base::State* rob1, ompl::base::State* rob2, double col_dist, int dim) {
+    double distance = 0.0;
+    double temp = 0.0;
 
-    if (distance < col_dist) {
-        return true;
+    for (int i=0; i<dim; i++) {
+        temp = (rob1->as<ompl::base::RealVectorStateSpace::StateType>()->values[i] - 
+                        rob2->as<ompl::base::RealVectorStateSpace::StateType>()->values[i]);
+        distance += temp * temp;
+    }
+    if (distance < col_dist*col_dist) {
+        return false;
     }
     return true;
 
 }
 
+//motion: current robot to be checked
+//robots: all robots
+//index: indexes of robots to consider (last one is current)
 bool ompl::geometric::RRTstar::checkRobots(Motion* motion, std::vector<LoopVariables>& robots, std::vector<int> index) {
     //This should be moved elsewhere; either steps along collisions are integer movements or fractions of each branch
     ompl::base::RealVectorStateSpace space;
-    int dim = space.getDimension();
+    int dim = sizeof(motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values)/sizeof(float);
+   
     double col_dist = 5.0;
     bool one_node_per = true;
     double step;
@@ -326,39 +348,51 @@ bool ompl::geometric::RRTstar::checkRobots(Motion* motion, std::vector<LoopVaria
     } else {
         step = 1.0;
     }
+    //if (index.size() == 1) {
 
+    //}
     //These should be retrieved and reversed so that it is calculated from first point (goal states continue after full movement)
+    //Get robots current processed
     std::vector<LoopVariables> valid_trees = {};
     for (int i=0; i<index.size(); i++) {
         valid_trees.push_back(robots[index[i]]);
     }
 
     //Extract trees
-    std::vector<std::vector<base::State>> path_states = getPathStates(motion, valid_trees);
+    std::vector<std::vector<base::State*>> path_states = getPathStates(motion, valid_trees);
+    std::vector<base::State*> cur = path_states[path_states.size()-1];
 
     //Start iterating though collisions - continue until no movement
-    while(true) {
-        std::vector<std::vector<double>> step_size = {};
-        std::vector<base::State> cur = path_states[path_states.size()-1];
-        for (int i=0; i<path_states.size(); i++) {
-            std::vector<double> step_size_j = {};
-            if (one_node_per) {
-                for (int j=0; j<dim; i++) {
-                    step_size_j.push_back(step * (path_states[i][1].as<ompl::base::RealVectorStateSpace::StateType>()->values[j]
-                                                - path_states[i][0].as<ompl::base::RealVectorStateSpace::StateType>()->values[j]));
+    bool new_steps = true;
+    std::vector<std::vector<double>> step_size = {};
+    while ( true ) {
+        if (new_steps) {
+            new_steps = false;
+            step_size = {};
+            for (int i=0; i<path_states.size(); i++) {
+                std::vector<double> step_size_j = {};
+                if (one_node_per) {
+                    for (int j=0; j<dim; j++) {
+                        step_size_j.push_back(step * (path_states[i][1]->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]
+                                                    - path_states[i][0]->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]));
+                    }
+                    step_size.push_back(step_size_j);
+                } else {
+                    for (int j=0; j<dim; i++) {
+                        step_size_j.push_back(step);
+                    }
+                    step_size.push_back(step_size_j);
                 }
-                step_size.push_back(step_size_j);
-            } else {
-                for (int j=0; j<dim; i++) {
-                    step_size_j.push_back(step);
+                if (i == path_states.size()-1) {
+                    break;
                 }
-                step_size.push_back(step_size_j);
             }
-        
+        }
+        for (int i=0; i<path_states.size()-1; i++) {
             //No Collision
-            if (colDistance(path_states[i][0], cur[0], col_dist)) {
+            if (colDistance(path_states[i][0], cur[0], col_dist, dim)) {
                 for (int j=0; j<dim; j++) {
-                    path_states[i][0].as<ompl::base::RealVectorStateSpace::StateType>()->values[j] += step_size[i][j];
+                    path_states[i][0]->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] += step_size[i][j];
                 }
                 //Check if moved point is at or over next point
                 //need to implement but not necessary for testing
@@ -366,20 +400,28 @@ bool ompl::geometric::RRTstar::checkRobots(Motion* motion, std::vector<LoopVaria
                 return false;
             }
         }
+        //to here
         for (int j=0; j<dim; j++) {
-            cur[0].as<ompl::base::RealVectorStateSpace::StateType>()->values[j] += step_size[path_states.size()-1][j];
+            cur[0]->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] += step_size[path_states.size()-1][j];
         }
-        if (cur[0].as<ompl::base::RealVectorStateSpace::StateType>()->values[0] ==
-            cur[1].as<ompl::base::RealVectorStateSpace::StateType>()->values[0]) {
+        if (std::abs(cur[0]->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] -
+            cur[1]->as<ompl::base::RealVectorStateSpace::StateType>()->values[0]) < 0.001) {
+
+            new_steps = true;
+
             for (int i=0; i<path_states.size(); i++) {
                 path_states[i].erase(path_states[i].begin());
             }
+
             cur.erase(cur.begin());
+
             if (cur.size() == 1) {
                 return true;
             }  
         }
     }
+    
+    return true;
 }
 
 int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition &ptc, LoopVariables& lv, std::vector<LoopVariables>& robots, std::vector<int> index)
@@ -439,7 +481,7 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
         motion->cost = opt_->combineCosts(nmotion->cost, motion->incCost);
 
         //Check robot collisions here
-        if (checkRobots(motion, robots, index)) {
+        if (index.size() > 1 && !checkRobots(motion, robots, index)) {
             return 0;
         }
 
@@ -567,6 +609,10 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
             // add motion to the tree
             nn_->add(motion);
             motion->parent->children.push_back(motion);
+
+            lv.rmotion = motion;
+
+            return 1;
         }
 
         //********************
@@ -697,6 +743,8 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
             lv.approxGoalMotion = motion;
             lv.approxDist = distanceFromGoal;
         }
+    } else {
+        return 0;
     }
 
     // terminate if a sufficient solution is found
@@ -706,7 +754,7 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
         return 1; //break;
     }
 
-    return 0;
+    return 1;
 }
 
 ompl::base::PlannerStatus ompl::geometric::RRTstar::solve_end(const base::PlannerTerminationCondition &ptc, LoopVariables& lv)

@@ -591,8 +591,8 @@ namespace ompl
             base::PlannerStatus solve_end(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
 
             bool checkRobots(Motion* motion, std::vector<LoopVariables>& robots, std::vector<int> index);
-            std::vector<std::vector<base::State>> getPathStates(RRTstar::Motion* motion, std::vector<LoopVariables> valid_trees);
-            bool colDistance(base::State rob1, base::State rob2, double col_dist);
+            std::vector<std::vector<base::State*>> getPathStates(RRTstar::Motion* motion, std::vector<LoopVariables> valid_trees);
+            bool colDistance(base::State* rob1, base::State* rob2, double col_dist, int dim);
 
             //LoopVariables lv;
         };

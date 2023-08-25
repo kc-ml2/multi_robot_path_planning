@@ -98,21 +98,19 @@ ompl::base::PlannerStatus ompl::geometric::mRRT::solve(const base::PlannerTermin
     //Generator
     auto rng = std::default_random_engine {};
     std::vector<int> index_array = {0, 1, 2, 3, 4, 5, 6, 7};
-
+    int res = 0;
     while (ptc == false)
     {
         //Shuffle before new iteration
         std::shuffle(std::begin(index_array), std::end(index_array), rng);
         std::vector<int> used_index = {};
-
         for(int i=0;i<v_rrtStar_.size();i++){
             //Append current index to index list for collision checks
             used_index.push_back(index_array[i]);
-            auto res = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->solve_once(ptc, v_lv[i], v_lv, used_index);          
-            if(res == 1) {
-                OMPL_INFORM("Optimal path is found: %d", i);
-                break;
+            while(res == 0) {
+                res = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->solve_once(ptc, v_lv[index_array[i]], v_lv, used_index); 
             }
+            res = 0;
         }
     }
 
