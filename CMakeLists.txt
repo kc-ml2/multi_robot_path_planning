@@ -22,6 +22,8 @@ add_executable (ompl_app
   algorithm/RRTstar.cpp
   algorithm/mRRT.cpp
   algorithm/Planner.cpp
+  algorithm/SimpleSetup.cpp
+  algorithm/PathSimplifier.cpp
 )
 
 

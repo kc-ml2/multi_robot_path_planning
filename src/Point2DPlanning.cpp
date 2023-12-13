@@ -35,7 +35,7 @@
 /* Author: Ioan Sucan */
 
 #include <ompl/base/spaces/RealVectorStateSpace.h>
-#include <ompl/geometric/SimpleSetup.h>
+#include <SimpleSetup.h>
 //#include <ompl/geometric/planners/rrt/RRTstar.h>
 //#include "RRTstar.h"
 #include "mRRT.h"
@@ -129,8 +129,9 @@ public:
             og::PathGeometric &p = ss_->getSolutionPath();
             if (!useDeterministicSampling_)
             {
-                ss_->getPathSimplifier()->simplifyMax(p);
-                ss_->getPathSimplifier()->smoothBSpline(p);
+                //ss_->getPathSimplifier()->simplifyMax(p);
+                //ss_->getPathSimplifier()->smoothBSpline(p);
+                //ss_->getPathSimplifier()->reorientedShortcutPath(p);
             }
 
             return true;

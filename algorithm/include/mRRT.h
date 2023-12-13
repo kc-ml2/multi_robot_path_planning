@@ -11,6 +11,7 @@
 
 
 #include "RRTstar.h"
+#include "PathSimplifier.h"
 
 namespace ompl
 {
@@ -26,6 +27,10 @@ namespace ompl
 
             base::PlannerStatus solve(const base::PlannerTerminationCondition &ptc) override;
 
+            std::vector<std::vector<ompl::base::State*>> apply_rsc(std::vector<std::vector<ompl::base::State*>> paths);
+            
+            std::vector<std::vector<double>> apply_shortcut(std::vector<ompl::base::State*> a, std::vector<double> b, std::vector<ompl::base::State*> c);
+            
             void clear() override;
 
             void setup() override;

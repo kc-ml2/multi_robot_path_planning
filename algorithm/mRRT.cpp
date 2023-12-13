@@ -1,5 +1,5 @@
 #include "mRRT.h"
-
+#include <math.h>
 #include <algorithm>
 #include <boost/math/constants/constants.hpp>
 #include <limits>
@@ -13,6 +13,8 @@
 #include "ompl/base/samplers/informed/OrderedInfSampler.h"
 #include "ompl/tools/config/SelfConfig.h"
 #include "ompl/util/GeometricEquations.h"
+
+#include <stdlib.h>
 
 
 ompl::geometric::mRRT::mRRT(const base::SpaceInformationPtr &si)
@@ -77,6 +79,126 @@ void ompl::geometric::mRRT::clear()
     }
 }
 
+std::vector<std::vector<double>> ompl::geometric::mRRT::apply_shortcut(std::vector<ompl::base::State*> a, std::vector<double> b, std::vector<ompl::base::State*> c){
+
+    // randomly select points along each of line segments a -> b and b > c
+    std::vector<std::vector<double>> outs;
+
+    double r1 = rand();
+    double r2 = rand();
+    std::vector<double> a_ = {};
+    std::vector<double> c_ = {};
+    for (int i=0; i<a.size(); i++) {
+        a_[i] = b[i] - (1.0-r1)*(*a[i]->as<ompl::base::RealVectorStateSpace::StateType>()->values) + 
+                                *a[i]->as<ompl::base::RealVectorStateSpace::StateType>()->values;
+        c_[i] = *c[i]->as<ompl::base::RealVectorStateSpace::StateType>()->values - (1.0-r2)*b[i] + b[i];
+    }
+
+    outs[0] = a_;
+    outs[1] = c_;
+
+    return outs;
+
+}
+
+std::vector<std::vector<ompl::base::State*>> ompl::geometric::mRRT::apply_rsc(std::vector<std::vector<ompl::base::State*>> paths){
+    std::vector<std::vector<ompl::base::State*>> new_paths;
+
+     // No. Robots * Length of path * Dimension (State)
+    
+    //Shortcut iterations
+    for (int i=0; i<500; i++) {
+
+        int segNum;
+        //No. robot * State
+        std::vector<ompl::base::State*> a;
+        std::vector<ompl::base::State*> b;
+        std::vector<ompl::base::State*> c;
+        
+        //Choose a segment and pull states for each DoF
+        segNum = rand() % (paths[0].size()-2) + 1;
+        for (int j=0; j<paths.size(); j++) {
+            a.push_back(paths[j][segNum-1]);
+            b.push_back(paths[j][segNum]);
+            c.push_back(paths[j][segNum+1]);
+        }
+
+        double radius;
+
+        int dim = paths.size();
+        double ab[dim];
+        double nums[dim];
+
+        double den = 0.0;
+        double num = 0.0;
+        
+        //Get radius
+        for (int j=0; j<dim; j++) {
+            ab[j] = a[j]->as<ompl::base::RealVectorStateSpace::StateType>()->values - 
+                    c[j]->as<ompl::base::RealVectorStateSpace::StateType>()->values;
+            nums[j] = ab[j]*(*b[j]->as<ompl::base::RealVectorStateSpace::StateType>()->values);
+            num += std::pow(nums[j], 2.0);
+            
+            den += std::pow(ab[j], 2.0);
+        }
+
+        radius = std::pow(num, 0.5)/std::pow(den, 0.5);
+        
+        //distance to generate new points within different DoF
+        double dist = radius * 0.2;
+
+        std::vector<double> d = {};
+        double total;
+        double shift;
+
+        //Begin calculating shifted point
+        while ( true ) {
+            auto rng = std::default_random_engine {};
+            std::vector<int> index_array = {0, 1, 2, 3, 4, 5, 6, 7};
+            std::shuffle(std::begin(index_array), std::end(index_array), rng);
+
+            total = std::pow(radius, 2.0);
+
+            for (int j=0; j<paths.size()-1; j++) {
+                shift = (rand() - 0.5) * 2.0 * dist;
+                d.push_back(*b[index_array[i]]->as<ompl::base::RealVectorStateSpace::StateType>()->values + shift);
+                total -= d[d.size()-1];
+                if (total < 0) {
+                    break;
+                }
+            }
+            
+            if (total > 0) {
+                d.push_back(*b[index_array[b.size()-1]]->as<ompl::base::RealVectorStateSpace::StateType>()->values + 
+                                std::pow(total, 0.5));
+
+                //Attempt Short-Cut
+                std::vector<std::vector<double>> pta = apply_shortcut(a, d, c);
+                for (int j=0; j<a.size(); j++) {
+                    a[j]->as<ompl::base::RealVectorStateSpace::StateType>()->values = &pta[0][j];
+                    c[j]->as<ompl::base::RealVectorStateSpace::StateType>()->values = &pta[1][j];
+                }
+
+                //Check collisions here
+
+                if (!v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->checkRobots(a, c)) {
+                    break;
+                }
+
+
+                for (int j=0; j<paths.size(); j++) {
+                    paths[j].erase(paths[j].begin() + segNum);
+                    paths[j].insert(paths[j].begin() + segNum, c[j]);
+                    paths[j].insert(paths[j].begin() + segNum, a[j]);
+                }
+                break;
+            }
+        }
+    }
+
+    return paths;   
+}
+
 ompl::base::PlannerStatus ompl::geometric::mRRT::solve(const base::PlannerTerminationCondition &ptc)
 { 
     ompl::base::PlannerStatus ret;
@@ -114,15 +236,55 @@ ompl::base::PlannerStatus ompl::geometric::mRRT::solve(const base::PlannerTermin
         }
     }
 
+    // Merge paths // No. Robots * Length of path * Dimension (State)
+    std::vector<std::vector<ompl::base::State*>> paths; 
+    int maxSize = 0;
+    for (int i=0; i<index_array.size(); i++) {
+        auto cur = v_lv[i].bestGoal;
+        std::vector<ompl::base::State*> path;
+        while( cur->parent != NULL ) {
+            path.push_back(cur->state);
+            cur = cur->parent;
+        }
+        paths.push_back(path);
+        if ( path.size() > maxSize ) {
+            maxSize = path.size();
+        }
+    }
+    
+    for (int i=0; i<index_array.size(); i++) {
+        for (int j=0; j<paths[i].size()-maxSize; j++) {
+            paths[i].push_back(paths[i][paths[i].size()-1]);
+        }
+    }
+
+    //Apply overall RSC algorithm (includes additional short-cuts)
+    auto new_paths = apply_rsc(paths);
+    
+    // Convert back to old
+    for (int i=0; i<index_array.size(); i++) {
+        v_lv[i].bestGoal = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->convert_old(new_paths[i]);
+    }
+    
+    //modify this to handle the bestgoal string of paths
     for(int i=0;i<v_rrtStar_.size();i++){
         ret = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->solve_end(ptc, v_lv[i]);
     }
 
+    //********
+
+    //Need to add randomization
+
+    //********
+
     //ret = v_rrtStar_[i]->solve(ptcond);
     //bool ret = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->solve_once();
-
+    
     return ret;
 }
+
+
+
 
 void ompl::geometric::mRRT::getPlannerData(base::PlannerData &data) const
 {

@@ -379,6 +379,8 @@ namespace ompl
 
                 /** \brief The set of motions descending from the current motion */
                 std::vector<Motion *> children;
+
+                
             };
 
             /** \brief Create the samplers */
@@ -555,6 +557,8 @@ namespace ompl
                 base::Goal *goal;
                 base::GoalSampleableRegion *goal_s;
 
+                Motion *bestGoal;
+
                 bool symCost;
                 base::ReportIntermediateSolutionFn intermediateSolutionCallback;
                 Motion *approxGoalMotion;
@@ -573,6 +577,7 @@ namespace ompl
                 std::vector<int> valid;
                 unsigned int rewireTest;
                 unsigned int statesGenerated;
+
  
             };
 
@@ -589,11 +594,14 @@ namespace ompl
             bool solve_init(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
             int solve_once(const base::PlannerTerminationCondition &ptc, LoopVariables& lv, std::vector<LoopVariables>& robots, std::vector<int> index);
             base::PlannerStatus solve_end(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
-
+            
             bool checkRobots(Motion* motion, std::vector<LoopVariables>& robots, std::vector<int> index);
+            bool checkRobots(std::vector<State*> a, std::vector<State*> b);
             std::vector<std::vector<base::State*>> getPathStates(RRTstar::Motion* motion, std::vector<LoopVariables> valid_trees);
             bool colDistance(base::State* rob1, base::State* rob2, double col_dist, int dim);
 
+
+            ompl::geometric::RRTstar::Motion* convert_old(std::vector<ompl::base::State*> paths);
             //LoopVariables lv;
         };
     }

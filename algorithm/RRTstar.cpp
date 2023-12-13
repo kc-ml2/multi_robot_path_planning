@@ -274,6 +274,8 @@ bool ompl::geometric::RRTstar::solve_init(const base::PlannerTerminationConditio
 *                                                                                                              *
 ***************************************************************************************************************/
 
+//Actually should be in mRRT
+
 
 
 /* ***********************************************************************************************************
@@ -330,6 +332,45 @@ bool ompl::geometric::RRTstar::colDistance(ompl::base::State* rob1, ompl::base::
     }
     return true;
 
+}
+
+bool ompl::geometric::RRTstar::checkRobots(std::vector<State*> a, std::vector<State*>) {
+    //This should be moved elsewhere; either steps along collisions are integer movements or fractions of each branch
+    ompl::base::RealVectorStateSpace space;
+    int dim = sizeof(motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values)/sizeof(float);
+   
+    double col_dist = 5.0;
+
+    double step;
+    step = 0.01; 
+
+    std::vector<double> step_size = {};
+    for (int i=0; i<path_states.size(); i++) {
+        std::vector<double> step_size_j = {};
+        for (int j=0; j<dim; j++) {
+            step_size_j.push_back(step * (a[i]->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]
+                                        - c[i]->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]));
+        }
+        step_size.push_back(step_size_j);
+        }
+    }
+        
+    for (int i=0; i<path_states.size()-1; i++) {
+        //No Collision
+        for (int j=i+1; j<path_states.size()-1; j++) {
+            if (colDistance(a[i], a[j], col_dist, dim)) {
+                for (int j=0; j<dim; j++) {
+                    a[i]->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] += step_size[i][j];
+                }
+                //Check if moved point is at or over next point
+                //need to implement but not necessary for testing
+            } else {
+                return false;
+            }
+        }
+    }
+    
+    return true;
 }
 
 //motion: current robot to be checked
@@ -750,11 +791,24 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
     // terminate if a sufficient solution is found
     if (bestGoalMotion_ && opt_->isSatisfied(bestCost_)){
         OMPL_INFORM("Best goal is founded");
-
+        lv.bestGoal = bestGoalMotion_;
         return 1; //break;
     }
 
     return 1;
+}
+
+
+ompl::geometric::RRTstar::Motion* ompl::geometric::RRTstar::convert_old(std::vector<ompl::base::State*> paths) {
+    Motion *temp;
+    Motion *cur;
+    temp->state = paths[0];
+    for (int i=1; i<paths.size(); i++) {
+        cur->state = paths[i];
+        cur->parent = temp;
+        temp = cur;
+    }
+    return temp;
 }
 
 ompl::base::PlannerStatus ompl::geometric::RRTstar::solve_end(const base::PlannerTerminationCondition &ptc, LoopVariables& lv)
@@ -762,6 +816,7 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve_end(const base::Planne
 
     // Add our solution (if it exists)
     Motion *newSolution = nullptr;
+    /*
     if (bestGoalMotion_)
     {
         // We have an exact solution
@@ -773,6 +828,11 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve_end(const base::Planne
         newSolution = lv.approxGoalMotion;
     }
     // No else, we have nothing
+    */
+   //modified to handle to variable in loopvariables (so it can be handles outside this file)
+    if (lv.bestGoal) {
+        newSolution = lv.bestGoal;
+    }
 
     // Add what we found
     if (newSolution)
@@ -816,7 +876,9 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve_end(const base::Planne
                 getName().c_str(), lv.statesGenerated, lv.rewireTest, goalMotions_.size(), bestCost_.value());
 
     // We've added a solution if newSolution == true, and it is an approximate solution if bestGoalMotion_ == false
-    return {newSolution != nullptr, bestGoalMotion_ == nullptr};
+
+    //because of modification both will always be either True or False
+    return {newSolution != nullptr, lv.bestGoal == nullptr};
 }
 
 ompl::base::PlannerStatus ompl::geometric::RRTstar::solve(const base::PlannerTerminationCondition &ptc)
