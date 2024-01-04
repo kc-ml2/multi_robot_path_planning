@@ -379,6 +379,14 @@ namespace ompl
 
                 /** \brief The set of motions descending from the current motion */
                 std::vector<Motion *> children;
+
+
+
+                //************************************
+                // To record order of state in branch
+                int stateOrder = -1;
+
+                //************************************
             };
 
             /** \brief Create the samplers */
@@ -450,6 +458,9 @@ namespace ompl
 
             /** \brief A nearest-neighbors datastructure containing the tree of motions */
             std::shared_ptr<NearestNeighbors<Motion *>> nn_;
+
+            double robot_radius;
+            double edgeChecks = 8.0;
 
             /** \brief The fraction of time the goal is picked as the state to expand towards (if such a state is
              * available) */
@@ -531,7 +542,7 @@ namespace ompl
 
             /** \brief Number of iterations the algorithm performed */
             unsigned int iterations_{0u};
-
+            
             ///////////////////////////////////////
             // Planner progress property functions
             std::string numIterationsProperty() const
@@ -571,10 +582,24 @@ namespace ompl
                 std::vector<std::size_t> sortedCostIndices;
 
                 std::vector<int> valid;
+
                 unsigned int rewireTest;
                 unsigned int statesGenerated;
+
+                Motion *new_motion;
+
+
+                
  
             };
+
+            void setRadius(int radius) {
+                robot_radius = radius;
+            }
+
+            int getRadius() {
+                return robot_radius;
+            }
 
             /** \brief Get the name of the planner */
             const std::string &getName() const{
@@ -588,13 +613,16 @@ namespace ompl
 
             bool solve_init(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
             int solve_once(const base::PlannerTerminationCondition &ptc, LoopVariables& lv, std::vector<LoopVariables>& robots, std::vector<int> index);
+            void rewire(const base::PlannerTerminationCondition &ptc, LoopVariables& lv, std::vector<LoopVariables>& robots, std::vector<int> index);
             base::PlannerStatus solve_end(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
 
-            bool checkRobots(Motion* motion, std::vector<LoopVariables>& robots, std::vector<int> index);
-            std::vector<std::vector<base::State*>> getPathStates(RRTstar::Motion* motion, std::vector<LoopVariables> valid_trees);
-            bool colDistance(base::State* rob1, base::State* rob2, double col_dist, int dim);
+            bool checkMotionObject(base::State* state, base::State* dstate);
 
-            //LoopVariables lv;
+            bool checkRobots(Motion* motion, std::vector<LoopVariables>& robots, std::vector<int> index);
+            std::vector<std::vector<std::vector<float>>> getPathStates(RRTstar::Motion* motion, std::vector<LoopVariables> valid_trees, int dim);
+            bool colDistance(std::vector<float> rob1, std::vector<float> rob2, double col_dist, int dim);
+            std::vector<float> stepVector(std::vector<float> p1, std::vector<float> p2, float step);
+
         };
     }
 }

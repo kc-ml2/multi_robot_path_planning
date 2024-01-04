@@ -75,6 +75,7 @@ public:
             auto space(std::make_shared<ob::RealVectorStateSpace>());
             space->addDimension(0.0, ppm_.getWidth());
             space->addDimension(0.0, ppm_.getHeight());
+
             maxWidth_ = ppm_.getWidth() - 1;
             maxHeight_ = ppm_.getHeight() - 1;
             ss_ = std::make_shared<og::SimpleSetup>(space);
@@ -117,11 +118,11 @@ public:
         {
             if (ss_->getPlanner())
                 ss_->getPlanner()->clear();
-            ss_->solve(30.0);
+            ss_->solve(60.0);
         }
         const std::size_t ns = ss_->getProblemDefinition()->getSolutionCount();
         //OMPL_INFORM("Found %d solutions", (int)ns);
-        if (ss_->haveSolutionPath())
+        if (false)//ss_->haveSolutionPath())
         {
             if (!useDeterministicSampling_)
                 ss_->simplifySolution();

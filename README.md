@@ -149,3 +149,12 @@ Node array of each robot
 	],
 }
 ```
+
+
+## To run PPM generator
+ - python ppmmaker.py
+ 
+ Will make a random block environment
+ 
+- cd build
+- ./ompl_app ../resources/ppm/blank.ppm

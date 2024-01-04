@@ -42,7 +42,8 @@ namespace ompl
 
 
             void save(const char *filename);
-
+            
+            void saveFiles(const char *filename);
         };
     }
 }

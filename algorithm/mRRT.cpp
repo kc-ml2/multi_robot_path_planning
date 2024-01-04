@@ -18,7 +18,7 @@
 ompl::geometric::mRRT::mRRT(const base::SpaceInformationPtr &si)
   : base::Planner(si, "mRRT")
 {
-    ppm_.loadFile("/home/alex/Documents/Planner/multi_robot_path_planning/resources/ppm/floor.ppm");
+    ppm_.loadFile("/home/alex/Documents/Planner/multi_robot_path_planning/resources/ppm/blank.ppm");
 }
 
 ompl::geometric::mRRT::~mRRT()
@@ -42,8 +42,8 @@ void ompl::geometric::mRRT::setup()
 {
     Planner::setup();
 
-    std::vector<std::vector<int>> p_start { {229, 109}, {253, 762}, {401, 1288}, {910,1405}, {1561, 1131}, {1537, 651}, {1625, 54}, {360, 543}};
-    std::vector<std::vector<int>> p_end { {253, 762}, {401, 1288}, {910,1405}, {1561, 1131}, {1537, 651}, {1625, 54}, {360, 543}, {229, 109}};
+    std::vector<std::vector<int>> p_start { {20, 20}, {20, 980}, {500, 20}, {20, 500} , {250, 20}, {250, 980}, {20, 750}, {980, 750}};
+    std::vector<std::vector<int>> p_end { {980, 980}, {980, 20}, {500, 980}, {980, 500} , {750, 980}, {750, 20}, {980, 250}, {20, 250}};
 
     for(int n_robot=0;n_robot<p_start.size();n_robot++){
 
@@ -63,6 +63,24 @@ void ompl::geometric::mRRT::setup()
         
         rrtStar->setProblemDefinition(pdef);
         rrtStar->setup();
+
+        rrtStar->setRadius(5.0);
+
+        rrtStar->setRange(100.0);
+        
+        rrtStar->setGoalBias(0.1);
+        rrtStar->setRewireFactor(0.5);
+
+        rrtStar->setTreePruning(1);
+        rrtStar->setKNearest(1);
+        rrtStar->setDelayCC(1); //maybe not
+        rrtStar->setSampleRejection(1);
+        rrtStar->setNewStateRejection(1);
+        rrtStar->setAdmissibleCostToCome(1);
+        rrtStar->setOrderedSampling(1);
+        rrtStar->setBatchSize(10);
+
+
 
         v_rrtStar_.push_back(rrtStar);
 
@@ -85,7 +103,6 @@ ompl::base::PlannerStatus ompl::geometric::mRRT::solve(const base::PlannerTermin
 
     for(int i=0;i<v_rrtStar_.size();i++){
         ompl::geometric::RRTstar::LoopVariables lv;
-
         auto res = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->solve_init(ptc, lv);
         if(!res) {
             OMPL_ERROR("failed initialize RRTstart ==> %d", i);
@@ -93,26 +110,71 @@ ompl::base::PlannerStatus ompl::geometric::mRRT::solve(const base::PlannerTermin
         }
 
         v_lv.push_back(lv);
+
     }
     
     //Generator
     auto rng = std::default_random_engine {};
     std::vector<int> index_array = {0, 1, 2, 3, 4, 5, 6, 7};
     int res = 0;
+
     while (ptc == false)
     {
         //Shuffle before new iteration
-        std::shuffle(std::begin(index_array), std::end(index_array), rng);
+        //std::shuffle(std::begin(index_array), std::end(index_array), rng);
         std::vector<int> used_index = {};
-        for(int i=0;i<v_rrtStar_.size();i++){
+
+        //For debugging - This shouldn't matter as a new robot isn't checked until it is called and new_motion is set as new epoch
+        for (int i=0; i<index_array.size(); i++) {
+            v_lv[i].new_motion = NULL;
+        }
+
+        // Original code wasn't working because rewiring and initial path plan weren't separated
+
+
+        bool success;
+        for(int i=0;i<index_array.size();i++){
             //Append current index to index list for collision checks
             used_index.push_back(index_array[i]);
-            while(res == 0) {
-                res = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->solve_once(ptc, v_lv[index_array[i]], v_lv, used_index); 
+
+            success = true;
+            int num_checks = 50;
+            for (int checks=0; checks<num_checks; checks++) {
+                res = v_rrtStar_[used_index[i]]->as<ompl::geometric::RRTstar>()->solve_once(ptc, v_lv[used_index[i]], v_lv, used_index); 
+                if (res==1.0) {
+                    break;
+                }
+                if (checks == num_checks-1) {
+                    success = false;
+                }
+            }
+            //Failed to find solution, other paths not possible
+            if (!success) {
+                break;
             }
             res = 0;
         }
+        //If all cases were successful move the new motion to recently added motions
+        if (success) {
+            for (int i=0;i<index_array.size();i++) {
+                v_lv[i].rmotion = v_lv[i].new_motion;
+            }
+        }
+
+        //For rewire all successful rewires are added (order comes priority)
+        //Shuffle before new iteration
+        //std::shuffle(std::begin(index_array), std::end(index_array), rng);
+        used_index = {};
+        for(int i=0;i<index_array.size();i++){
+            //Append current index to index list for collision checks
+            used_index.push_back(index_array[i]);
+
+            //No need to iterate as we are using the recently added node nearest neighbors
+            v_rrtStar_[used_index[i]]->as<ompl::geometric::RRTstar>()->rewire(ptc, v_lv[used_index[i]], v_lv, used_index); 
+
+        }
     }
+
 
     for(int i=0;i<v_rrtStar_.size();i++){
         ret = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->solve_end(ptc, v_lv[i]);
