@@ -587,6 +587,7 @@ namespace ompl
                 unsigned int statesGenerated;
 
                 Motion *new_motion;
+                Motion *finalGoalMotion;
 
 
                 
@@ -622,6 +623,9 @@ namespace ompl
             std::vector<std::vector<std::vector<float>>> getPathStates(RRTstar::Motion* motion, std::vector<LoopVariables> valid_trees, int dim);
             bool colDistance(std::vector<float> rob1, std::vector<float> rob2, double col_dist, int dim);
             std::vector<float> stepVector(std::vector<float> p1, std::vector<float> p2, float step);
+
+            bool checkMotionObjectDouble(std::vector<double> p1, std::vector<double> p2, int dim);
+            void convertMotion(std::vector<std::vector<double>> final, LoopVariables& lv, int index);
 
         };
     }

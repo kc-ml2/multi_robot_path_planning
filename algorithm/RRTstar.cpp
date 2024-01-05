@@ -430,6 +430,41 @@ bool ompl::geometric::RRTstar::checkRobots(Motion* motion, std::vector<LoopVaria
     return true;
 }
 
+bool ompl::geometric::RRTstar::checkMotionObjectDouble(std::vector<double> p1, std::vector<double> p2, int dim) {
+    ompl::base::State* s1 = si_->allocState();
+    ompl::base::State* s2 = si_->allocState();
+
+    for (int i=0; i<p1.size()/dim; i++) {
+        for (int j=0; j<dim; j++) {
+            s1->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] = p1[i*dim + j];
+            s2->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] = p2[i*dim + j];
+            if (!checkMotionObject(s1, s2)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+void ompl::geometric::RRTstar::convertMotion(std::vector<std::vector<double>> final, LoopVariables& lv, int index) {
+    //put back into form - remember order is reversed
+    std::vector<Motion*> m = {};
+    for (int i=0; i<final.size(); i++) {
+        m.push_back(new Motion(si_));
+        for (int j=0; j<final[0].size(); j++) {
+            m[i]->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] = final[i][j];
+        }
+    }
+
+    for (int i=0; i<final.size()-1; i++) {
+        m[i]->parent = m[i+1];
+    }
+    m[m.size()-1]->parent = NULL;
+
+    bestGoalMotion_ = m[0];
+    lv.finalGoalMotion = m[0];
+}
+
 bool ompl::geometric::RRTstar::checkMotionObject(base::State* state, base::State* dstate)
 {
     double radius = getRadius();
@@ -783,7 +818,7 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
     // terminate if a sufficient solution is found
     if (bestGoalMotion_ && opt_->isSatisfied(bestCost_)){
         OMPL_INFORM("Best goal is founded");
-
+        lv.finalGoalMotion = bestGoalMotion_;
         return 1; //break;
     }
 
