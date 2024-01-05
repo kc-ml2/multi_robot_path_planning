@@ -460,6 +460,9 @@ namespace ompl
             /** \brief The maximum length of a motion to be added to a tree */
             double maxDistance_{0.};
 
+            double robot_radius;
+            double edgeChecks = 8.0;
+
             /** \brief The random number generator */
             RNG rng_;
 
@@ -580,8 +583,6 @@ namespace ompl
 
                 Motion *new_motion;
                 Motion *finalGoalMotion;
-
-                int robot_radius;
 
                 
  
