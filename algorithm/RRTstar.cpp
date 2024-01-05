@@ -400,68 +400,134 @@ bool ompl::geometric::RRTstar::checkRobots(Motion* motion, std::vector<LoopVaria
     }
 
     //Extract trees
-    std::vector<std::vector<base::State*>> path_states = getPathStates(motion, valid_trees);
-    std::vector<base::State*> cur = path_states[path_states.size()-1];
+    std::vector<std::vector<std::vector<float>>> path_states = getPathStates(motion, valid_trees, dim);
 
-    //Start iterating though collisions - continue until no movement
-    bool new_steps = true;
-    std::vector<std::vector<double>> step_size = {};
-    while ( true ) {
-        if (new_steps) {
-            new_steps = false;
-            step_size = {};
-            for (int i=0; i<path_states.size(); i++) {
-                std::vector<double> step_size_j = {};
-                if (one_node_per) {
-                    for (int j=0; j<dim; j++) {
-                        step_size_j.push_back(step * (path_states[i][1]->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]
-                                                    - path_states[i][0]->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]));
-                    }
-                    step_size.push_back(step_size_j);
-                } else {
-                    for (int j=0; j<dim; i++) {
-                        step_size_j.push_back(step);
-                    }
-                    step_size.push_back(step_size_j);
-                }
-                if (i == path_states.size()-1) {
-                    break;
+    //iterate over path segments, over robots 1->n-1
+    std::vector<std::vector<float>> new_robot = path_states[path_states.size()-1];
+    float current_step = step;
+
+    for (int i=0; i<path_states.size()-2; i++) {
+        //Choose one robot to compare to
+        std::vector<std::vector<float>> old_robot = path_states[i];
+
+        //iterate through segments
+        current_step = step;
+
+        if (old_robot.size() == 0) {
+            return true;
+        }
+
+        for (int j=0; j<(std::min(new_robot.size(), old_robot.size()))-1; j++) {
+            //iterate through steps
+            for (int k=0; k < (int) 1.0/step; k++) {
+                if (!colDistance(stepVector(old_robot[j], old_robot[j+1], current_step), 
+                                 stepVector(new_robot[j], new_robot[j+1], current_step), col_dist, dim)) {
+                    //Collision
+                    return false;
                 }
             }
+            current_step += step;            
         }
-        for (int i=0; i<path_states.size()-1; i++) {
-            //No Collision
-            if (colDistance(path_states[i][0], cur[0], col_dist, dim)) {
-                for (int j=0; j<dim; j++) {
-                    path_states[i][0]->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] += step_size[i][j];
-                }
-                //Check if moved point is at or over next point
-                //need to implement but not necessary for testing
-            } else {
+        
+    }
+    
+    return true;
+}
+
+bool ompl::geometric::RRTstar::checkMotionObjectDouble(std::vector<double> p1, std::vector<double> p2, int dim) {
+    ompl::base::State* s1 = si_->allocState();
+    ompl::base::State* s2 = si_->allocState();
+
+    for (int i=0; i<p1.size()/dim; i++) {
+        for (int j=0; j<dim; j++) {
+            s1->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] = p1[i*dim + j];
+            s2->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] = p2[i*dim + j];
+            if (!checkMotionObject(s1, s2)) {
                 return false;
             }
         }
-        //to here
-        for (int j=0; j<dim; j++) {
-            cur[0]->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] += step_size[path_states.size()-1][j];
-        }
-        if (std::abs(cur[0]->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] -
-            cur[1]->as<ompl::base::RealVectorStateSpace::StateType>()->values[0]) < 0.001) {
+    }
+    return true;
+}
 
-            new_steps = true;
-
-            for (int i=0; i<path_states.size(); i++) {
-                path_states[i].erase(path_states[i].begin());
-            }
-
-            cur.erase(cur.begin());
-
-            if (cur.size() == 1) {
-                return true;
-            }  
+void ompl::geometric::RRTstar::convertMotion(std::vector<std::vector<double>> final, LoopVariables& lv, int index) {
+    //put back into form - remember order is reversed
+    std::vector<Motion*> m = {};
+    for (int i=0; i<final.size(); i++) {
+        m.push_back(new Motion(si_));
+        for (int j=0; j<final[0].size(); j++) {
+            m[i]->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] = final[i][j];
         }
     }
-    
+
+    for (int i=0; i<final.size()-1; i++) {
+        m[i]->parent = m[i+1];
+    }
+    m[m.size()-1]->parent = NULL;
+
+    bestGoalMotion_ = m[0];
+    lv.finalGoalMotion = m[0];
+}
+
+bool ompl::geometric::RRTstar::checkMotionObject(base::State* state, base::State* dstate)
+{
+    double radius = getRadius();
+    ompl::base::State* p1 = si_->allocState();
+    ompl::base::State* p2 = si_->allocState();
+
+    for (int i=0; i<edgeChecks; i++) {
+        double factor = 2.0*M_PI * ((double) i / edgeChecks);
+
+        p1->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] = 
+                state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] + radius*std::cos(factor);
+
+        p1->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] = 
+                state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] + radius*std::sin(factor);
+
+        p2->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] = 
+                dstate->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] + radius*std::cos(factor);
+
+        p2->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] = 
+                dstate->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] + radius*std::sin(factor);
+        
+        //Need to be implemented in a different way
+        if (p1->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] < radius) {
+            return false;
+        }
+        if (p1->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] < radius) {
+            return false;
+        }
+        if (p2->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] < radius) {
+            return false;
+        }
+        if (p2->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] < radius) {
+            return false;
+        }
+
+
+        if (p1->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] > 2000.0-radius) {
+            return false;
+        }
+        if (p1->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] > 2000.0-radius) {
+            return false;
+        }
+        if (p2->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] > 2000.0-radius) {
+            return false;
+        }
+        if (p2->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] > 2000.0-radius) {
+            return false;
+        }
+        if (!si_->checkMotion(p1, p2)) {
+            si_->freeState(p1);
+            si_->freeState(p2);
+
+            return false;
+        }
+    }
+
+    si_->freeState(p1);
+    si_->freeState(p2);
+
     return true;
 }
 
@@ -791,7 +857,7 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
     // terminate if a sufficient solution is found
     if (bestGoalMotion_ && opt_->isSatisfied(bestCost_)){
         OMPL_INFORM("Best goal is founded");
-        lv.bestGoal = bestGoalMotion_;
+        lv.finalGoalMotion = bestGoalMotion_;
         return 1; //break;
     }
 

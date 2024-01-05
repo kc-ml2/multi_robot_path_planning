@@ -14,7 +14,7 @@
 #include "ompl/tools/config/SelfConfig.h"
 #include "ompl/util/GeometricEquations.h"
 
-#include <stdlib.h>
+#include <cstdlib>
 
 
 ompl::geometric::mRRT::mRRT(const base::SpaceInformationPtr &si)
@@ -66,6 +66,27 @@ void ompl::geometric::mRRT::setup()
         rrtStar->setProblemDefinition(pdef);
         rrtStar->setup();
 
+<<<<<<< Updated upstream
+=======
+        rrtStar->setRadius(5.0);
+
+        rrtStar->setRange(200.0);
+        
+        rrtStar->setGoalBias(0.05);
+        rrtStar->setRewireFactor(0.1);
+
+        rrtStar->setTreePruning(1);
+        rrtStar->setKNearest(1);
+        rrtStar->setDelayCC(1); //maybe not
+        rrtStar->setSampleRejection(1);
+        rrtStar->setNewStateRejection(1);
+        rrtStar->setAdmissibleCostToCome(1);
+        rrtStar->setOrderedSampling(1);
+        rrtStar->setBatchSize(10);
+
+
+
+>>>>>>> Stashed changes
         v_rrtStar_.push_back(rrtStar);
 
     }
@@ -257,16 +278,151 @@ ompl::base::PlannerStatus ompl::geometric::mRRT::solve(const base::PlannerTermin
             paths[i].push_back(paths[i][paths[i].size()-1]);
         }
     }
-
-    //Apply overall RSC algorithm (includes additional short-cuts)
-    auto new_paths = apply_rsc(paths);
     
-    // Convert back to old
+    //This section can probably be moved to a different function
+
+
+    // collect goal paths & pad final states -> extract state values out for complete ease in processing
+    std::vector<std::vector<std::vector<double>>> pre_paths = {};
+    int max_length = 0;
+    int counter;
+    int dim = sizeof(v_lv[0].rmotion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values)/sizeof(double);
+
+    //Combine the state dimension across all robots s.t. num_segments * num_robots * dim_states -> num_segments * num_states
     for (int i=0; i<index_array.size(); i++) {
-        v_lv[i].bestGoal = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->convert_old(new_paths[i]);
+        auto motion = v_lv[i].finalGoalMotion;
+        std::vector<std::vector<double>> cur_path = {};
+        counter = 0;
+        while( motion != NULL ) {
+            std::vector<double> cur_state = {};
+            for (int j=0; j<dim; j++) {
+                cur_state.push_back(motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]);
+            }
+        }
+
+        //For rewire all successful rewires are added (order comes priority)
+        //Shuffle before new iteration
+        //std::shuffle(std::begin(index_array), std::end(index_array), rng);
+        used_index = {};
+        for(int i=0;i<index_array.size();i++){
+            //Append current index to index list for collision checks
+            used_index.push_back(index_array[i]);
+
+            //No need to iterate as we are using the recently added node nearest neighbors
+            v_rrtStar_[used_index[i]]->as<ompl::geometric::RRTstar>()->rewire(ptc, v_lv[used_index[i]], v_lv, used_index); 
+
+        }
     }
     
-    //modify this to handle the bestgoal string of paths
+    //This section can probably be moved to a different function
+
+
+    // collect goal paths & pad final states -> extract state values out for complete ease in processing
+    std::vector<std::vector<std::vector<double>>> pre_paths = {};
+    int max_length = 0;
+    int counter;
+    int dim = sizeof(v_lv[0].rmotion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values)/sizeof(double);
+
+    //Combine the state dimension across all robots s.t. num_segments * num_robots * dim_states -> num_segments * num_states
+    for (int i=0; i<index_array.size(); i++) {
+        auto motion = v_lv[i].finalGoalMotion;
+        std::vector<std::vector<double>> cur_path = {};
+        counter = 0;
+        while( motion != NULL ) {
+            std::vector<double> cur_state = {};
+            for (int j=0; j<dim; j++) {
+                cur_state.push_back(motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]);
+            }
+            cur_path.push_back(cur_state);
+            motion = motion->parent;
+            counter += 1;
+        }
+        if (counter > max_length) {
+            max_length = counter;
+        }
+        pre_paths.push_back(cur_path);
+    }
+    
+    //pad endings and combine state
+    for (int i=0; i<index_array.size(); i++) {
+        if (pre_paths[i].size() < max_length) {
+            for (int j=0; j<max_length-pre_paths[i].size(); j++) {
+                pre_paths[i].insert(pre_paths[i].begin(), pre_paths[i][0]);
+            }
+        }
+    }
+    std::vector<std::vector<double>> paths = {};
+    for (int i=0; i<index_array.size(); i++) {
+        paths.push_back({});
+        for (int j=0; j<pre_paths[0].size(); j++) {
+            for (int k=0; k<pre_paths[0][0].size(); k++) {
+                paths[i].push_back(pre_paths[i][j][k]);
+            }
+        }
+    }
+
+
+    //Apply Shortcutting - most will fail so this can be quite generous
+    int num_attempts = 100;
+    int total_dim = paths[0].size(); //num robots * dimensionality
+    int path_length = paths.size();
+    int path_index; //segment of path to apply shortcutting
+
+    std::vector<double> p0;
+    std::vector<double> p1;
+    std::vector<double> p2;
+
+    for (int i=0; i<num_attempts; i++) {
+        path_index = (rand() % (path_index-2));
+        p0 = paths[path_index];
+        p1 = paths[path_index+1];
+        p2 = paths[path_index+2];
+
+        //Choose random point along line - for now uniform squared - ideally gaussian biased towards adjoining vertex
+        double r1 = std::pow(rand(), 2.0);
+        double r2 = std::pow(rand(), 2.0);
+
+        //Find location of segment
+        std::vector<double> n1 = {};
+        std::vector<double> n2 = {};
+        for (int j=0; j<p1.size(); j++) {
+            n1.push_back(p1[j] + (p0[j]-p1[j])*r1);
+            n2.push_back(p1[j] + (p2[j]-p1[j])*r2);
+        }
+        //Borrow from rrt to check motion for individual states
+        bool success = true;
+        for (int j=0; j<index_array.size(); j++) {
+            if (!v_rrtStar_[j]->as<ompl::geometric::RRTstar>()->checkMotionObjectDouble(n1, n2, dim)) {
+                success = false;
+                break;
+            }
+        }
+
+        //if successful modify path
+        if (success) {
+            paths.erase(paths.begin() + path_index+1);
+            paths.insert(paths.begin() + path_index+1, n2);
+            paths.insert(paths.begin() + path_index+1, n1);
+        }
+    }
+
+
+    //Move path back to original state - keep in mind these nodes are reversed
+    std::vector<std::vector<double>> final;
+    std::vector<double> final_state;
+    for (int i=0; i<index_array.size(); i++) {
+        final = {};
+        for (int j=0; j<paths.size(); j++) {
+            final_state = {};
+            for (int k=0; k<dim; k++) {
+                final_state.push_back(paths[j][i*dim + k]);
+            }
+            final.push_back(final_state);
+        }
+        v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->convertMotion(final, v_lv[i], i);
+    }
+
+
     for(int i=0;i<v_rrtStar_.size();i++){
         ret = v_rrtStar_[i]->as<ompl::geometric::RRTstar>()->solve_end(ptc, v_lv[i]);
     }

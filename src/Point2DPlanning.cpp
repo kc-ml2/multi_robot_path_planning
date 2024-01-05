@@ -117,7 +117,7 @@ public:
         {
             if (ss_->getPlanner())
                 ss_->getPlanner()->clear();
-            ss_->solve(30.0);
+            ss_->solve(10.0);
         }
         const std::size_t ns = ss_->getProblemDefinition()->getSolutionCount();
         //OMPL_INFORM("Found %d solutions", (int)ns);

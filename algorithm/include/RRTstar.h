@@ -578,8 +578,22 @@ namespace ompl
                 unsigned int rewireTest;
                 unsigned int statesGenerated;
 
+                Motion *new_motion;
+                Motion *finalGoalMotion;
+
+                int robot_radius;
+
+                
  
             };
+
+            void setRadius(int radius) {
+                robot_radius = radius;
+            }
+
+            int getRadius() {
+                return robot_radius;
+            }
 
             /** \brief Get the name of the planner */
             const std::string &getName() const{
@@ -596,13 +610,14 @@ namespace ompl
             base::PlannerStatus solve_end(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
             
             bool checkRobots(Motion* motion, std::vector<LoopVariables>& robots, std::vector<int> index);
-            bool checkRobots(std::vector<State*> a, std::vector<State*> b);
-            std::vector<std::vector<base::State*>> getPathStates(RRTstar::Motion* motion, std::vector<LoopVariables> valid_trees);
-            bool colDistance(base::State* rob1, base::State* rob2, double col_dist, int dim);
+            std::vector<std::vector<std::vector<float>>> getPathStates(RRTstar::Motion* motion, std::vector<LoopVariables> valid_trees, int dim);
+            bool colDistance(std::vector<float> rob1, std::vector<float> rob2, double col_dist, int dim);
+            std::vector<float> stepVector(std::vector<float> p1, std::vector<float> p2, float step);
 
 
-            ompl::geometric::RRTstar::Motion* convert_old(std::vector<ompl::base::State*> paths);
-            //LoopVariables lv;
+            bool checkMotionObjectDouble(std::vector<double> p1, std::vector<double> p2, int dim);
+            void convertMotion(std::vector<std::vector<double>> final, LoopVariables& lv, int index);
+
         };
     }
 }
