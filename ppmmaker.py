@@ -12,23 +12,32 @@ image = array.array('B', [255, 255, 255] * width * height)
 
 count = 0
 total_size = width*height
-percentage_cover = 0.3
+percentage_cover = 0.5
 
 while (count < percentage_cover * total_size):
-	x = np.random.randint(40, width-40)
-	y = np.random.randint(40, height-40)
-	dx = np.random.randint(40, 100)
-	dy = np.random.randint(40, 100)
+	x = np.random.randint(0, width)
+	y = np.random.randint(0, height)
+	dx = np.random.randint(75, 100)
+	dy = np.random.randint(75, 100)
 	
 	for i in range(x, x+dx):
 		for j in range(y, y+dy):
-			if j > height-40 or i > width-40:
+			if j > width-1 or i > height-1:
+				continue
+			if j < 100 and i < 100:
+				continue
+			if j < 100 and i > 900:
+				continue
+			if j > 900 and i < 100:
+				continue
+			if j > 900 and i > 900:
 				continue
 			index = 3 * (j * width + i)
-			image[index] = 0
-			image[index + 1] = 0
-			image[index + 2] = 0
+#			image[index] = 0
+#			image[index + 1] = 0
+#			image[index + 2] = 0
 			count += 1
+
 
 # Save the PPM image as a binary file
 with open('resources/ppm/blank.ppm', 'wb') as f:

@@ -462,6 +462,11 @@ namespace ompl
             double robot_radius;
             double edgeChecks = 8.0;
 
+            std::vector<std::vector<int>> startPos;
+            std::vector<std::vector<int>> goalPos;
+            float totalCost = 1000000000.0;
+            
+
             /** \brief The fraction of time the goal is picked as the state to expand towards (if such a state is
              * available) */
             double goalBias_{.05};
@@ -589,7 +594,22 @@ namespace ompl
                 Motion *new_motion;
                 Motion *finalGoalMotion;
 
+                Motion *borrowMotion;
+                
+                std::vector<std::vector<double>> trueFinalGoalMotion;
+                
+                Motion *fromGoal;
+                std::vector<Motion *> finalGoalMotions_;
+                
 
+                std::vector<std::vector<Motion *>> allMotions;
+                double cost = 0.0;
+                
+                int r_index;
+
+
+                //bool isGoal = false;
+                //float totalCost = 0.0;
                 
  
             };
@@ -614,7 +634,7 @@ namespace ompl
 
             bool solve_init(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
             int solve_once(const base::PlannerTerminationCondition &ptc, LoopVariables& lv, std::vector<LoopVariables>& robots, std::vector<int> index);
-            void rewire(const base::PlannerTerminationCondition &ptc, LoopVariables& lv, std::vector<LoopVariables>& robots, std::vector<int> index);
+            std::vector<int> rewire(const base::PlannerTerminationCondition &ptc, LoopVariables& lv, std::vector<LoopVariables>& robots, std::vector<int> index);
             base::PlannerStatus solve_end(const base::PlannerTerminationCondition &ptc, LoopVariables& lv);
 
             bool checkMotionObject(base::State* state, base::State* dstate);
@@ -626,6 +646,24 @@ namespace ompl
 
             bool checkMotionObjectDouble(std::vector<double> p1, std::vector<double> p2, int dim);
             void convertMotion(std::vector<std::vector<double>> final, LoopVariables& lv, int index);
+
+            void setStartGoal(std::vector<std::vector<int>> start, std::vector<std::vector<int>> goal);
+            void setIndex(int r_index, LoopVariables& lv);
+
+            std::vector<double> findMaxDeltas(std::vector<std::vector<double>> costMatrix, std::vector<std::vector<double>> savedCostMatrix);
+
+            bool checkForGoals(std::vector<ompl::geometric::RRTstar::LoopVariables> &v_lv);
+            void findMins(std::vector<std::vector<double>> costMatrix, std::vector<double>* minCosts, std::vector<int>* minCostInds);
+            int findDeltas(std::vector<std::vector<double>> costMatrix, std::vector<double> minCosts, std::vector<int> minCostInds, std::vector<double> minDeltas, std::vector<int> minDeltaInds);
+
+            bool checkGoalRobots(std::vector<LoopVariables>& robots);
+            std::vector<std::vector<float>> stepVectorMulti(std::vector<std::vector<float>> p1, std::vector<std::vector<float>> p2, float step);
+            bool colDistanceMulti(std::vector<std::vector<float>> robots, double col_dist, int dim);
+
+            float getCost();
+            
+
+            
 
         };
     }

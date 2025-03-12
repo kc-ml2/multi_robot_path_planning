@@ -43,7 +43,7 @@
 #include <math.h>
 #include <cmath>
 
-#include <ompl/base/spaces/RealVectorStateSpace.h>
+#include <RealVectorStateSpace.h>
 
 
 
@@ -161,6 +161,15 @@ void ompl::geometric::RRTstar::clear()
     prunedMeasure_ = 0.0;
 }
 
+void ompl::geometric::RRTstar::setStartGoal(std::vector<std::vector<int>> start, std::vector<std::vector<int>> goal) {
+    startPos = start;
+    goalPos = goal;
+}
+
+void ompl::geometric::RRTstar::setIndex(int r_index, LoopVariables& lv) {
+    lv.r_index = r_index;
+}
+
 bool ompl::geometric::RRTstar::solve_init(const base::PlannerTerminationCondition &ptc, LoopVariables& lv)
 {
     checkValidity();
@@ -171,12 +180,6 @@ bool ompl::geometric::RRTstar::solve_init(const base::PlannerTerminationConditio
 
     lv.symCost = opt_->isSymmetric();
 
-    /*
-    base::Goal *goal = pdef_->getGoal().get();
-    auto *goal_s = dynamic_cast<base::GoalSampleableRegion *>(goal);
-
-    bool symCost = opt_->isSymmetric();
-    */
     // Check if there are more starts
     if (pis_.haveMoreStartStates() == true)
     {
@@ -230,27 +233,9 @@ bool ompl::geometric::RRTstar::solve_init(const base::PlannerTerminationConditio
     lv.rewireTest = 0;
     lv.statesGenerated = 0;
 
-    /*
-    const base::ReportIntermediateSolutionFn intermediateSolutionCallback = pdef_->getIntermediateSolutionCallback();
-
-    Motion *approxGoalMotion = nullptr;
-    double approxDist = std::numeric_limits<double>::infinity();
-
-    auto *rmotion = new Motion(si_);
-    base::State *rstate = rmotion->state;
-    base::State *xstate = si_->allocState();
-
-    std::vector<Motion *> nbh;
-
-    std::vector<base::Cost> costs;
-    std::vector<base::Cost> incCosts;
-    std::vector<std::size_t> sortedCostIndices;
-
-    std::vector<int> valid;
-    unsigned int rewireTest = 0;
-    unsigned int statesGenerated = 0;
-
-    */
+    lv.finalGoalMotion = new Motion(si_);
+    lv.finalGoalMotion->cost = ompl::base::Cost(1000000000.0);
+    lv.trueFinalGoalMotion = {};
 
     if (bestGoalMotion_)
         OMPL_INFORM("%s: Starting planning with existing solution of cost %.5f", getName().c_str(),
@@ -265,29 +250,10 @@ bool ompl::geometric::RRTstar::solve_init(const base::PlannerTerminationConditio
             std::min(maxDistance_, r_rrt_ * std::pow(log((double)(nn_->size() + 1u)) / ((double)(nn_->size() + 1u)),
                                                      1 / (double)(si_->getStateDimension()))));
 
-    // our functor for sorting nearest neighbors
-    /*CostIndexCompare compareFn(lv.costs, *opt_);*/
 
     return true;
 }
 
-/* ***********************************************************************************************************
-*                                                                                                              *
-*                                                                                                              *
-*                      Short-Cutting Here                                                                      *
-*                                                                                                              *
-*                                                                                                              *
-***************************************************************************************************************/
-
-
-
-/* ***********************************************************************************************************
-*                                                                                                              *
-*                                                                                                              *
-*                      Collision Checking Here                                                                 *
-*                                                                                                              *
-*                                                                                                              *
-***************************************************************************************************************/
 
 
 std::vector<std::vector<std::vector<float>>> ompl::geometric::RRTstar::getPathStates(ompl::geometric::RRTstar::Motion* motion, std::vector<ompl::geometric::RRTstar::LoopVariables> valid_trees, int dim) {
@@ -301,7 +267,12 @@ std::vector<std::vector<std::vector<float>>> ompl::geometric::RRTstar::getPathSt
 
     int counter=0;
     //Iterate through paths to get history to current point for completed points (could be optimized)
-    for (int i=0; i<valid_trees.size()-1; i++) {
+    int loop_num = valid_trees.size()-1;
+    if (motion_copy == NULL) {
+        loop_num +=1;
+    }
+    for (int i=0; i<loop_num; i++) {
+
         cur_states = {};
         copy_trees.push_back(valid_trees[i].new_motion);
         length_counter = 0;
@@ -310,12 +281,13 @@ std::vector<std::vector<std::vector<float>>> ompl::geometric::RRTstar::getPathSt
             for (int j=0; j<dim; j++) {
                 states.push_back(copy_trees[i]->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]);
             }
-
             cur_states.push_back(states);
+
             copy_trees[i] = copy_trees[i]->parent;
             if (length_counter > max_path_length) {
                 max_path_length = length_counter;
             }
+            length_counter += 1;
 
         }
         std::reverse(cur_states.begin(), cur_states.end());
@@ -323,32 +295,41 @@ std::vector<std::vector<std::vector<float>>> ompl::geometric::RRTstar::getPathSt
         
     }
 
-    //Current motion (different from trees as it's not added yet)
-    cur_states = {};
-    length_counter = 0;
-    while ( motion_copy != NULL ) {
-        std::vector<float> states = {};
-        for (int j=0; j<dim; j++) {
-            states.push_back(motion_copy->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]);
-        }
-        cur_states.push_back(states);
-        motion_copy = motion_copy->parent;
-        if (length_counter > max_path_length) {
-                max_path_length = length_counter;
-        }
+    if (motion_copy != NULL) {
+        //Current motion (different from trees as it's not added yet)
 
+        cur_states = {};
+        length_counter = 0;
+        while ( motion_copy != NULL ) {
+            std::vector<float> states = {};
+            for (int j=0; j<dim; j++) {
+                states.push_back(motion_copy->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]);
+            }
+            cur_states.push_back(states);
+            motion_copy = motion_copy->parent;
+            if (length_counter > max_path_length) {
+                    max_path_length = length_counter;
+            }
+
+        }
+        std::reverse(cur_states.begin(), cur_states.end());
+        path_states.push_back(cur_states);
     }
 
-    std::reverse(cur_states.begin(), cur_states.end());
-    path_states.push_back(cur_states);
+    
 
     //make sure all lengths of robots are same, if not pause at goal
+    
     for (int i=0; i<path_states.size(); i++) {
-        while (path_states[i].size() < max_path_length) {
-            path_states[i].push_back(path_states[i][path_states.size()-1]);
+        
+        if (path_states[i].size() == 0) {
+            continue;
+        }
+        while (path_states[i].size() <= max_path_length) {
+            path_states[i].push_back(path_states[i][path_states[i].size()-1]);
         }
     }
-    
+
     return path_states;
 }
 
@@ -358,22 +339,108 @@ bool ompl::geometric::RRTstar::colDistance(std::vector<float> rob1, std::vector<
 
     for (int i=0; i<dim; i++) {
         temp = (rob1[i] - rob2[i]);
-        distance += temp * temp;
+        distance += (temp * temp);
     }
-    if (distance < col_dist*col_dist) {
+    if (sqrt(distance) < col_dist){//col_dist) {
         return false;
+
     }
     return true;
 
 }
 
+bool ompl::geometric::RRTstar::colDistanceMulti(std::vector<std::vector<float>> robots, double col_dist, int dim) {
+    double distance = 0.0;
+    double temp = 0.0;
+    
+    for (int i=0; i<robots.size(); i++) {
+        for (int j=0; j<robots.size(); j++) {
+            if (j != i) {
+                distance = 0.0;
+                for (int k=0; k<robots[0].size(); k++) {
+                    temp = robots[i][k] - robots[j][k];
+                    distance += (temp * temp);
+                   
+                }
+                
+                if (sqrt(distance) < col_dist){
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
 std::vector<float> ompl::geometric::RRTstar::stepVector(std::vector<float> p1, std::vector<float> p2, float step) {
     std::vector<float> out = {};
-
+   
     for (int i=0; i<p1.size(); i++) {
         out.push_back(p1[i] + (p2[i]-p1[i])*step);
     }
     return out;
+}
+
+std::vector<std::vector<float>> ompl::geometric::RRTstar::stepVectorMulti(std::vector<std::vector<float>> p1, std::vector<std::vector<float>> p2, float step) {
+    std::vector<std::vector<float>> out = {};
+
+    for (int i=0; i<p1.size(); i++) {
+        out.push_back({});
+        for (int j=0; j<p1[0].size(); j++) {
+            out[i].push_back(p1[i][j] + (p2[i][j]-p1[i][j])*step);
+        }
+        
+    }
+    
+    return out;
+}
+
+bool ompl::geometric::RRTstar::checkGoalRobots(std::vector<LoopVariables>& robots) {
+    ompl::base::RealVectorStateSpace space;
+    
+    int dim = sizeof(robots[0].new_motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values)/sizeof(float);
+   
+    double col_dist = getRadius();
+    bool one_node_per = true;
+    double step = 0.05;
+
+    std::vector<LoopVariables> valid_trees = {};
+    for (int i=0; i<robots.size(); i++) {
+        valid_trees.push_back(robots[i]);
+    }
+    
+    std::vector<std::vector<std::vector<float>>> path_states = getPathStates(NULL, valid_trees, dim);
+    float current_step = 0.0;
+
+    for (int i=0; i<path_states.size(); i++) {
+        if (path_states[i].size() == 0) {
+            return true;
+        }
+    }
+    
+    
+    std::vector<std::vector<float>> current_state;
+    std::vector<std::vector<float>> next_state;
+    
+    for (int i=0; i<path_states[0].size()-1; i++) {
+        current_state = {};
+        next_state = {};
+        for (int j=0; j<path_states.size(); j++) {
+            //iterate through steps
+            current_state.push_back(path_states[j][i]);
+            next_state.push_back(path_states[j][i+1]);
+        }
+        current_step = 0.0;
+        for (int k=0; k < (int) 1.0/step+1; k++) {
+            if (!colDistanceMulti(stepVectorMulti(current_state, next_state, current_step), col_dist, dim)){
+                return false;
+            }
+            current_step += step; 
+        }    
+
+    }
+  
+    return true;
 }
 
 //motion: current robot to be checked
@@ -382,12 +449,13 @@ std::vector<float> ompl::geometric::RRTstar::stepVector(std::vector<float> p1, s
 bool ompl::geometric::RRTstar::checkRobots(Motion* motion, std::vector<LoopVariables>& robots, std::vector<int> index) {
     //This should be moved elsewhere; either steps along collisions are integer movements or fractions of each branch
     ompl::base::RealVectorStateSpace space;
+
     int dim = sizeof(motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values)/sizeof(float);
    
     double col_dist = getRadius();
     bool one_node_per = true;
-    double step = 0.1;
-    
+    double step = 0.05;
+
     //These should be retrieved and reversed so that it is calculated from first point (goal states continue after full movement)
     //Get robots current processed
     std::vector<LoopVariables> valid_trees = {};
@@ -397,12 +465,14 @@ bool ompl::geometric::RRTstar::checkRobots(Motion* motion, std::vector<LoopVaria
 
     //Extract trees
     std::vector<std::vector<std::vector<float>>> path_states = getPathStates(motion, valid_trees, dim);
-
+    
     //iterate over path segments, over robots 1->n-1
     std::vector<std::vector<float>> new_robot = path_states[path_states.size()-1];
-    float current_step = step;
 
-    for (int i=0; i<path_states.size()-2; i++) {
+    float current_step = step;
+    //OMPL_INFORM("%d", path_states.size());
+    //exit(0);
+    for (int i=0; i<path_states.size()-1; i++) {
         //Choose one robot to compare to
         std::vector<std::vector<float>> old_robot = path_states[i];
 
@@ -412,30 +482,31 @@ bool ompl::geometric::RRTstar::checkRobots(Motion* motion, std::vector<LoopVaria
         if (old_robot.size() == 0) {
             return true;
         }
-
         for (int j=0; j<(std::min(new_robot.size(), old_robot.size()))-1; j++) {
             //iterate through steps
+            current_step = 0.0;
             for (int k=0; k < (int) 1.0/step; k++) {
                 if (!colDistance(stepVector(old_robot[j], old_robot[j+1], current_step), 
                                  stepVector(new_robot[j], new_robot[j+1], current_step), col_dist, dim)) {
                     //Collision
                     return false;
                 }
-            }
-            current_step += step;            
+                current_step += step; 
+            }                     
         }
         
     }
-    
+
     return true;
 }
 
 bool ompl::geometric::RRTstar::checkMotionObjectDouble(std::vector<double> p1, std::vector<double> p2, int dim) {
     ompl::base::State* s1 = si_->allocState();
     ompl::base::State* s2 = si_->allocState();
-
+    
     for (int i=0; i<p1.size()/dim; i++) {
         for (int j=0; j<dim; j++) {
+            
             s1->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] = p1[i*dim + j];
             s2->as<ompl::base::RealVectorStateSpace::StateType>()->values[j] = p2[i*dim + j];
             if (!checkMotionObject(s1, s2)) {
@@ -468,6 +539,7 @@ void ompl::geometric::RRTstar::convertMotion(std::vector<std::vector<double>> fi
 bool ompl::geometric::RRTstar::checkMotionObject(base::State* state, base::State* dstate)
 {
     double radius = getRadius();
+    int edgeChecks = 8;
     ompl::base::State* p1 = si_->allocState();
     ompl::base::State* p2 = si_->allocState();
 
@@ -532,28 +604,28 @@ bool ompl::geometric::RRTstar::checkMotionObject(base::State* state, base::State
 int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition &ptc, LoopVariables& lv, std::vector<LoopVariables>& robots, std::vector<int> index)
 {
     CostIndexCompare compareFn(lv.costs, *opt_);
-
+    
     iterations_++;
 
     // sample random state (with goal biasing)
     // Goal samples are only sampled until maxSampleCount() goals are in the tree, to prohibit duplicate goal
     // states.
-    if (lv.goal_s && goalMotions_.size() < lv.goal_s->maxSampleCount() && rng_.uniform01() < goalBias_ &&
-        lv.goal_s->canSample())
+    if (rng_.uniform01() < goalBias_) {
         lv.goal_s->sampleGoal(lv.rstate);
+        }
     else
     {
-        // Attempt to generate a sample, if we fail (e.g., too many rejection attempts), skip the remainder of this
-        // loop and return to try again
-        if (!sampleUniform(lv.rstate))
-            return 0; //continue;
+    // Attempt to generate a sample, if we fail (e.g., too many rejection attempts), skip the remainder of this
+    // loop and return to try again
+    if (!sampleUniform(lv.rstate)) {
+        return 0;
     }
-
+    }
     // find closest state in the tree
     Motion *nmotion = nn_->nearest(lv.rmotion);
 
     if (lv.intermediateSolutionCallback && si_->equalStates(nmotion->state, lv.rstate))
-        return 0; //continue;
+        return 0; 
 
     base::State *dstate = lv.rstate;
 
@@ -564,15 +636,6 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
         si_->getStateSpace()->interpolate(nmotion->state, lv.rstate, maxDistance_ / d, lv.xstate);
         dstate = lv.xstate;
     }
-
-    //LoG
-    /*double* pnt = nmotion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values;
-    double* pnt2 = dstate->as<ompl::base::RealVectorStateSpace::StateType>()->values;
-    bool check = si_->checkMotion(nmotion->state, dstate);
-
-    OMPL_INFORM("%d iteration First motion state: %f, %f, %f", iterations_, pnt[0], pnt[1], pnt[2]);
-    OMPL_INFORM("%d iteration dstate %d : %f, %f, %f", iterations_, pnt2[0], pnt2[1], pnt2[2], check);
-    */
 
     // Initialize branch indexes
     if (lv.rmotion->stateOrder == -1) {
@@ -601,7 +664,7 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
 
         //CJH inform .. Node number -> lv.stateGenerated.
         ++lv.statesGenerated;
-
+        
 
         // cache for distance computations
         //
@@ -678,17 +741,28 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
                     lv.costs[i] = opt_->combineCosts(lv.nbh[i]->cost, lv.incCosts[i]);
                     if (opt_->isCostBetterThan(lv.costs[i], motion->cost))
                     {
-                        if ((!useKNearest_ || si_->distance(lv.nbh[i]->state, motion->state) < maxDistance_) &&
-                            si_->checkMotion(lv.nbh[i]->state, motion->state))
+                        
+                        bool motionValid =
+                        (!useKNearest_ || si_->distance(motion->state, lv.nbh[i]->state) < maxDistance_) &&
+                        checkMotionObject(lv.nbh[i]->state, motion->state);
+                            
+                        bool noRobotCollision = checkRobots(motion, robots, index);
+                    
+                        //Combine collisions
+                        motionValid = motionValid && noRobotCollision;
+                        if (motionValid) 
                         {
                             motion->incCost = lv.incCosts[i];
                             motion->cost = lv.costs[i];
                             motion->parent = lv.nbh[i];
                             lv.valid[i] = 1;
                         }
-                        else
+                        else{
                             lv.valid[i] = -1;
+                        }
+                            
                     }
+
                 }
                 else
                 {
@@ -698,16 +772,13 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
                 }
             }
         }
-
-        
-
+        //Space is too large to be a difference for multi-robot
         if (useNewStateRejection_)
         {
             if (opt_->isCostBetterThan(solutionHeuristic(motion), bestCost_))
             {
                 nn_->add(motion);
                 motion->parent->children.push_back(motion);
-                //lv.rmotion = motion;
             }
             else  // If the new motion does not improve the best cost it is ignored.
             {
@@ -721,32 +792,60 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
             // add motion to the tree
             nn_->add(motion);
             motion->parent->children.push_back(motion);
-
-            //lv.rmotion = motion;
-            //return 1;
         }
 
         bool checkForSolution = false;
         
         // Add the new motion to the goalMotion_ list, if it satisfies the goal
-        double distanceFromGoal;
-        if (lv.goal->isSatisfied(motion->state, &distanceFromGoal))
+        bool isInGoal = false;
+        double dist=0;
+        for (int i=0; i<goalPos[lv.r_index].size(); i++) {
+            dist += std::pow((goalPos[lv.r_index][i] - motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[i]), 2.0);
+        }
+        dist = std::sqrt(dist);
+        double rangeCheck = 100.0;
+        //OMPL_INFORM("%f, %f", dist, getRange());
+        if (dist < rangeCheck) {
+            isInGoal=true;
+        }
+        
+        if (isInGoal && std::count(goalMotions_.begin(), goalMotions_.end(), motion) == 0)
         {
             motion->inGoal = true;
             goalMotions_.push_back(motion);
             checkForSolution = true;
         }
-
+       
         // Checking for solution or iterative improvement
         if (checkForSolution)
         {
+            // For multi-robot we should store all of these solutions and not connect
+            // Solutions should be checked against each other
+
+            // This list will be a collection of paths that are within reach of the goal and allow for connection without collision (with environment)
+
+            // In theory this is stored in "goalMotion" -> this should be stored as in lv? would make iteration easier
+
+            // Complexity here is the number of goals reaching the end
+                    // Is this really complex? The search space in the end zone is only that of the radius of expansion minus collisions
+                    // Larger radius expands global complexity (this is already an issue in RRT*, but more of an issue in MRRT*)
+
+            // Added line:
+            lv.finalGoalMotions_ = goalMotions_;
+
+            // After this every %n iterations a global path will be checked only if:
+                // All robots have a path within range
+                // There are new paths (or modified old paths - rewire, etc) to be checked
+
+            // Given a rewire, path heads need their #modified flag to be changed
+            
             bool updatedSolution = false;
             if (!bestGoalMotion_ && !goalMotions_.empty())
             {
                 // We have found our first solution, store it as the best. We only add one
                 // vertex at a time, so there can only be one goal vertex at this moment.
                 bestGoalMotion_ = goalMotions_.front();
-                bestCost_ = bestGoalMotion_->cost;
+                bestCost_ = base::Cost(std::numeric_limits<double>::quiet_NaN());//bestGoalMotion_->cost;
                 updatedSolution = true;
 
                 OMPL_INFORM("%s: Found an initial solution with a cost of %.2f in %u iterations (%u "
@@ -763,7 +862,7 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
                     if (opt_->isCostBetterThan(goalMotion->cost, bestCost_))
                     {
                         bestGoalMotion_ = goalMotion;
-                        bestCost_ = bestGoalMotion_->cost;
+                        bestCost_ = base::Cost(std::numeric_limits<double>::quiet_NaN());//bestGoalMotion_->cost;
                         updatedSolution = true;
 
                         // Check if it satisfies the optimization objective, if it does, break the for loop
@@ -774,59 +873,21 @@ int ompl::geometric::RRTstar::solve_once(const base::PlannerTerminationCondition
                     }
                 }
             }
-
-            if (updatedSolution)
-            {
-                if (useTreePruning_)
-                {
-                    pruneTree(bestCost_);
-                }
-
-                if (lv.intermediateSolutionCallback)
-                {
-                    std::vector<const base::State *> spath;
-                    Motion *intermediate_solution =
-                        bestGoalMotion_->parent;  // Do not include goal state to simplify code.
-
-                    // Push back until we find the start, but not the start itself
-                    while (intermediate_solution->parent != nullptr)
-                    {
-                        spath.push_back(intermediate_solution->state);
-                        intermediate_solution = intermediate_solution->parent;
-                    }
-
-                    lv.intermediateSolutionCallback(this, spath, bestCost_);
-                }
-            }
         }
         
         // Checking for approximate solution (closest state found to the goal)
-        if (goalMotions_.size() == 0 && distanceFromGoal < lv.approxDist)
-        {
-            lv.approxGoalMotion = motion;
-            lv.approxDist = distanceFromGoal;
-        }
-
         motion->stateOrder = motion->parent->stateOrder+1;
         lv.new_motion = motion;
         lv.rmotion = motion;
     } else {
         return 0;
     }
-    
-    
-    // terminate if a sufficient solution is found
-    if (bestGoalMotion_ && opt_->isSatisfied(bestCost_)){
-        OMPL_INFORM("Best goal is founded");
-        lv.finalGoalMotion = bestGoalMotion_;
-        return 1; //break;
-    }
 
     return 1;
 }
 
 
-void ompl::geometric::RRTstar::rewire(const base::PlannerTerminationCondition &ptc, LoopVariables& lv, std::vector<LoopVariables>& robots, std::vector<int> index)
+std::vector<int> ompl::geometric::RRTstar::rewire(const base::PlannerTerminationCondition &ptc, LoopVariables& lv, std::vector<LoopVariables>& robots, std::vector<int> index)
 {
     //********************
     //********************
@@ -837,21 +898,21 @@ void ompl::geometric::RRTstar::rewire(const base::PlannerTerminationCondition &p
     bool checkForSolution = false;
 
     //bring newly added motion in
-    auto motion = lv.rmotion; //Could also use rmotion but this is for debugging epoch-wise
+    auto motion = lv.new_motion;
     bool motionValid = false;    
 
-    for (std::size_t i = 0; i < lv.nbh.size(); i++)
+    std::vector<int> checkListInds = {};
+
+    for (int i = 0; i < lv.nbh.size(); i++)
     {
         motionValid = false;
-        motion = lv.rmotion;
+        motion = lv.new_motion;
         if (lv.nbh[i] != motion->parent)
         {
 
             base::Cost nbhIncCost;
-            if (lv.symCost)
-                nbhIncCost = lv.incCosts[i];
-            else
-                nbhIncCost = opt_->motionCost(motion->state, lv.nbh[i]->state);
+            
+            nbhIncCost = opt_->motionCost(motion->state, lv.nbh[i]->state);
             base::Cost nbhNewCost = opt_->combineCosts(motion->cost, nbhIncCost);
             if (opt_->isCostBetterThan(nbhNewCost, lv.nbh[i]->cost))
             {
@@ -883,7 +944,8 @@ void ompl::geometric::RRTstar::rewire(const base::PlannerTerminationCondition &p
 
                 if (motionValid)
                 {
-                    
+                    checkListInds.push_back(i);
+    
                     // Remove this node from its parent list
                     removeFromParent(lv.nbh[i]);
 
@@ -895,36 +957,29 @@ void ompl::geometric::RRTstar::rewire(const base::PlannerTerminationCondition &p
 
                     // Update the costs of the node's children
                     updateChildCosts(lv.nbh[i]);
-
-                    checkForSolution = true;
+                    
                 }
             }
         }
     }
+    return checkListInds;
 }
 
 
 ompl::base::PlannerStatus ompl::geometric::RRTstar::solve_end(const base::PlannerTerminationCondition &ptc, LoopVariables& lv)
 {
 
-    // Add our solution (if it exists)
     Motion *newSolution = nullptr;
-    if (bestGoalMotion_)
-    {
-        // We have an exact solution
-        newSolution = bestGoalMotion_;
-    }
-    else if (lv.approxGoalMotion)
-    {
-        // We don't have a solution, but we do have an approximate solution
-        newSolution = lv.approxGoalMotion;
-    }
-    // No else, we have nothing
+    Motion *goalStorage = new Motion(si_);
+    
+    newSolution = lv.finalGoalMotion;
+ 
 
     // Add what we found
     if (newSolution)
     {
         ptc.terminate();
+
         // construct the solution path
         std::vector<Motion *> mpath;
         Motion *iterMotion = newSolution;
@@ -933,20 +988,21 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve_end(const base::Planne
             mpath.push_back(iterMotion);
             iterMotion = iterMotion->parent;
         }
-
         // set the solution path
+        
         auto path(std::make_shared<PathGeometric>(si_));
-        for (int i = mpath.size() - 1; i >= 0; --i)
-            path->append(mpath[i]->state);
-
+        for (int i = lv.trueFinalGoalMotion.size()-1; i >= 0; --i) {
+            goalStorage = new Motion(si_);
+            goalStorage->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[0] = lv.trueFinalGoalMotion[i][0];
+            goalStorage->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[1] = lv.trueFinalGoalMotion[i][1];
+            path->append(goalStorage->state);
+        }
         // Add the solution path.
         base::PlannerSolution psol(path);
         psol.setPlannerName(getName());
-
         // If we don't have a goal motion, the solution is approximate
         if (!bestGoalMotion_)
             psol.setApproximate(lv.approxDist);
-
         // Does the solution satisfy the optimization objective?
         psol.setOptimized(opt_, newSolution->cost, opt_->isSatisfied(bestCost_));
         pdef_->addSolutionPath(psol);
@@ -968,14 +1024,7 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve_end(const base::Planne
 
 ompl::base::PlannerStatus ompl::geometric::RRTstar::solve(const base::PlannerTerminationCondition &ptc)
 {
-    /*if(!solve_init(ptc)) return base::PlannerStatus::INVALID_START;
-
-    while (ptc == false)
-    {
-        if(solve_once(ptc) == 1) break;
-    }
-
-    return solve_end(ptc);*/
+    
     return base::PlannerStatus::UNKNOWN;
 }
 
@@ -1511,7 +1560,7 @@ bool ompl::geometric::RRTstar::sampleUniform(base::State *statePtr)
         // If bestCost is changing a lot by small amounts, this could
         // be prunedCost_ to reduce the number of times the informed sampling
         // transforms are recalculated.
-        return infSampler_->sampleUniform(statePtr, bestCost_);
+        return infSampler_->sampleUniform(statePtr, ompl::base::Cost(100000000000.0));
     }
     else
     {
@@ -1535,4 +1584,247 @@ void ompl::geometric::RRTstar::calculateRewiringLowerBounds()
     r_rrt_ =
         rewireFactor_ *
         std::pow(2 * (1.0 + 1.0 / dimDbl) * (prunedMeasure_ / unitNBallMeasure(si_->getStateDimension())), 1.0 / dimDbl);
+}
+
+float ompl::geometric::RRTstar::getCost() {
+    return totalCost;
+}
+
+
+
+bool ompl::geometric::RRTstar::checkForGoals(std::vector<ompl::geometric::RRTstar::LoopVariables> &v_lv) {
+    //Robot * path length
+    std::vector<std::vector<Motion*>> allMotions = {};
+    std::vector<std::vector<Motion*>> savedAllMotions = {};
+    
+    for (int i=0; i<v_lv.size(); i++) {
+        if (v_lv[i].finalGoalMotions_.size() == 0) {
+            return false;
+        }
+        allMotions.push_back({});
+        for (int j=0; j<v_lv[i].finalGoalMotions_.size(); j++) {
+            if (v_lv[i].finalGoalMotions_[j]->state) {
+                allMotions[i].push_back(v_lv[i].finalGoalMotions_[j]);
+            }
+        }
+    }
+    //Check first to see if finalGoalMotions_ is sorted by cost (before checking columns)
+    std::vector<std::vector<double>> costMatrix = {};
+    std::vector<std::vector<double>> savedCostMatrix = {};
+    double convertCost;
+
+    std::vector<LoopVariables> otherMotions = {};
+
+
+    //Iterate through each robot and each path to create a list of paths and associated costs
+
+
+    for (int i=0; i<v_lv.size(); i++) {
+        costMatrix.push_back({});
+        for (int j=0; j<allMotions[i].size(); j++) {
+            auto *goalMotion = new Motion(si_);
+            for (int k=0; k<goalPos[v_lv[i].r_index].size(); k++) {
+                goalMotion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[k] = goalPos[v_lv[i].r_index][k];               
+            }
+            goalMotion->parent = v_lv[i].finalGoalMotions_[j];
+           
+            if (!checkMotionObject(goalMotion->state, v_lv[i].finalGoalMotions_[j]->state)) {
+                continue;
+            }
+          
+            goalMotion->cost = opt_->combineCosts(v_lv[i].finalGoalMotions_[j]->cost, ompl::base::Cost(si_->distance(goalMotion->state, allMotions[i][j]->state)));
+            allMotions[i][j] = goalMotion;
+            costMatrix[i].push_back(goalMotion->cost.value());
+        }
+        if (costMatrix[i].size() == 0) {
+            return false;
+        }
+    }
+
+    savedAllMotions = allMotions;
+    savedCostMatrix = costMatrix;
+
+    std::vector<int> minCostInds;
+    std::vector<double> minCosts;
+    bool noSolution = false;
+    int toPop = -1;
+    int oldToPop;
+
+    int loopCount=0;
+
+    while (!noSolution) {
+    //Find minimum cost
+        minCosts = {};
+        minCostInds = {};
+
+        std::vector<double> minDeltas = {};
+        std::vector<int> minDeltaInds = {};
+        for (int i=0; i<allMotions.size(); i++) {
+            minDeltas.push_back((double)0.0);
+        }
+        
+        findMins(costMatrix, &minCosts, &minCostInds);
+
+        //Already cleared as it is others robots - small hack against collision check function
+        otherMotions = {};
+        std::vector<int> indices = {};
+        ///////other goal motions?
+        std::vector<double> deltas;
+        double currentCost = 0.0;
+        for (int i=0; i<allMotions.size(); i++) {
+            currentCost += ompl::base::Cost(costMatrix[i][minCostInds[i]]).value();
+        }
+        if (currentCost > totalCost) {
+
+            return false;
+        }
+
+        for (int i=0; i<allMotions.size(); i++) {
+            Motion* new_motion = new Motion(si_);
+            new_motion = allMotions[i][minCostInds[i]];
+            new_motion->cost = ompl::base::Cost(costMatrix[i][minCostInds[i]]);
+            
+            v_lv[i].new_motion = new_motion;
+            otherMotions.push_back(v_lv[i]);
+            indices.push_back(i);
+        }
+
+        if (checkGoalRobots(otherMotions)) {
+         
+            noSolution = true;
+ 
+        } else {
+            otherMotions = {};
+            
+            for (int i=0; i<v_lv.size(); i++) {
+                v_lv[i].new_motion = v_lv[i].finalGoalMotion;
+            otherMotions.push_back(v_lv[i]);
+            }
+            
+            auto oldCosts = minCosts;
+            findMins(costMatrix, &minCosts, &minCostInds);
+
+            oldToPop = toPop;
+            toPop = findDeltas(costMatrix, minCosts, minCostInds, minDeltas, minDeltaInds);
+            deltas = findMaxDeltas(costMatrix, savedCostMatrix);
+
+            if (toPop != oldToPop) {
+                for (int i=0; i<allMotions.size(); i++) {
+
+                    if (i != toPop && minDeltas[toPop] > deltas[i]) {
+                        allMotions[i] = savedAllMotions[i];
+                        costMatrix[i] = savedCostMatrix[i];
+                    }
+                }
+            }
+
+            allMotions[toPop].erase(allMotions[toPop].begin() + minCostInds[toPop]);
+            costMatrix[toPop].erase(costMatrix[toPop].begin() + minCostInds[toPop]);
+
+            for (int i=0; i<v_lv.size(); i++) {
+                if (allMotions[i].size() == 0) {
+                    //no possible remaining combinations
+                    return false;
+                }
+            }
+        }
+    }
+    std::vector<std::vector<Motion*>> checkMotions = {};
+
+    bool newGoalFound = false;
+    double newCost = 0.0;
+    for (int i=0; i<v_lv.size(); i++) {
+        newCost += allMotions[i][minCostInds[i]]->cost.value();
+    }
+
+    if (newCost < totalCost && noSolution) {
+        for (int i=0; i<v_lv.size(); i++) {
+            v_lv[i].finalGoalMotion = v_lv[i].new_motion;
+        }
+        newGoalFound = true;
+    }
+    if (newGoalFound) {
+        
+        for (int i=0; i<v_lv.size(); i++) {
+            v_lv[i].trueFinalGoalMotion = {};
+            while(v_lv[i].new_motion->parent != NULL) {
+                v_lv[i].trueFinalGoalMotion.push_back({});
+                for (int j=0; j<2; j++) {
+                    v_lv[i].trueFinalGoalMotion[v_lv[i].trueFinalGoalMotion.size()-1].push_back(v_lv[i].new_motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]);
+                }
+                v_lv[i].new_motion = v_lv[i].new_motion->parent;
+            }
+            v_lv[i].trueFinalGoalMotion.push_back({});
+            for (int j=0; j<2; j++) {
+                v_lv[i].trueFinalGoalMotion[v_lv[i].trueFinalGoalMotion.size()-1].push_back(v_lv[i].new_motion->state->as<ompl::base::RealVectorStateSpace::StateType>()->values[j]);
+            }
+            v_lv[0].cost = newCost; 
+            totalCost = newCost;
+        }
+    
+    }    
+
+    return true;
+}
+
+void ompl::geometric::RRTstar::findMins(std::vector<std::vector<double>> costMatrix, std::vector<double>* minCosts, std::vector<int>* minCostInds) {
+    for (int i=0; i<costMatrix.size(); i++) {
+        int index = 0;
+        double minCost = costMatrix[i][0];
+        for (int j=1; j<costMatrix[i].size(); j++){
+            if (costMatrix[i][index] > costMatrix[i][j]) {
+                index = j;
+                minCost = costMatrix[i][j];
+            }
+        }
+        minCosts->push_back(minCost);
+        minCostInds->push_back(index);
+    }
+}
+
+int ompl::geometric::RRTstar::findDeltas(std::vector<std::vector<double>> costMatrix, std::vector<double> minCosts, std::vector<int> minCostInds, std::vector<double> minDeltas, std::vector<int> minDeltaInds) {
+    for (int i=0; i<costMatrix.size(); i++) {
+        costMatrix[i][minCostInds[i]] *= 10000.0;
+    }
+
+    std::vector<double> tempMinCosts = {};
+    std::vector<int> tempMinCostInds = {};
+    findMins(costMatrix, &tempMinCosts, &tempMinCostInds);
+
+    double minDiff = tempMinCosts[0] - minCosts[0];
+    int minDiffInd = 0;
+    minDeltas.assign(0, minDiff);
+    for (int i=1; i<costMatrix.size(); i++) {
+        if (minDiff > (tempMinCosts[i] - minCosts[i])) {
+            minDiff = tempMinCosts[i] - minCosts[i];
+            minDiffInd = i;
+        }
+        minDeltas.assign(i, minDiff);
+    }
+
+    for (int i=0; i<costMatrix.size(); i++) {
+        if (i != minDiffInd) {
+            costMatrix[i][minCostInds[i]] = minCosts[i];
+        }
+    }
+    minCosts[minDiffInd] = tempMinCosts[minDiffInd];
+    return minDiffInd;
+}
+
+
+std::vector<double> ompl::geometric::RRTstar::findMaxDeltas(std::vector<std::vector<double>> costMatrix, std::vector<std::vector<double>> savedCostMatrix) {
+    std::vector<double> tempMinCosts = {};
+    std::vector<int> tempMinCostInds = {};
+    std::vector<double> tempSavedMinCosts = {};
+    std::vector<int> tempSavedMinCostInds = {};
+    findMins(costMatrix, &tempMinCosts, &tempMinCostInds);
+    findMins(savedCostMatrix, &tempSavedMinCosts, &tempSavedMinCostInds);
+
+    std::vector<double> deltas = {};
+
+    for (int i=0; i<costMatrix.size(); i++) {
+        deltas.push_back(tempMinCosts[i]-tempSavedMinCosts[i]);
+    }
+
+    return deltas;
 }

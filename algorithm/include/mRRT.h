@@ -1,6 +1,7 @@
 #ifndef OMPL_GEOMETRIC_PLANNERS_RRT_MRRTSTAR_
 #define OMPL_GEOMETRIC_PLANNERS_RRT_MRRTSTAR_
 
+
 #include "PlannerIncludes.h"
 #include "ompl/base/OptimizationObjective.h"
 #include "ompl/datastructures/NearestNeighbors.h"
@@ -35,6 +36,10 @@ namespace ompl
 
             ompl::PPM ppm_;
 
+            std::vector<std::vector<std::vector<double>>> borrowMotion;
+
+            bool threadExit = true;
+
             bool haveSolutionPath(int idx);
             ompl::geometric::PathGeometric getSolutionPath(int idx);
 
@@ -44,6 +49,9 @@ namespace ompl
             void save(const char *filename);
             
             void saveFiles(const char *filename);
+
+            void writeToCSV(std::vector<ompl::geometric::RRTstar::LoopVariables> v_lv, std::ofstream& myfile, std::ofstream& timefile);
+            void checkGoals(std::vector<ompl::geometric::RRTstar::LoopVariables> &v_lv);
         };
     }
 }

@@ -90,8 +90,6 @@ public:
             if (useDeterministicSampling_)
             {
                 // PRMstar can use the deterministic sampling
-                //ss_->setPlanner(std::make_shared<og::PRMstar>(ss_->getSpaceInformation()));
-                //ss_->setPlanner(std::make_shared<og::RRTstar>(ss_->getSpaceInformation()));
                 ss_->setPlanner(std::make_shared<og::mRRT>(ss_->getSpaceInformation()));
                 space->setStateSamplerAllocator(std::bind(&Plane2DEnvironment::allocateHaltonStateSamplerRealVector,
                                                           this, std::placeholders::_1, 2,
@@ -112,30 +110,13 @@ public:
         goal[1] = goal_col;
         ss_->setStartAndGoalStates(start, goal);
 
-        // generate a few solutions; all will be added to the goal;
-        //for (int i = 0; i < 10; ++i)
         for (int i = 0; i < 1; ++i)
         {
             if (ss_->getPlanner())
                 ss_->getPlanner()->clear();
-            ss_->solve(10.0);
+            ss_->solve(30.0);
         }
         const std::size_t ns = ss_->getProblemDefinition()->getSolutionCount();
-        //OMPL_INFORM("Found %d solutions", (int)ns);
-        if (false)//ss_->haveSolutionPath())
-        {
-            if (!useDeterministicSampling_)
-                ss_->simplifySolution();
-
-            og::PathGeometric &p = ss_->getSolutionPath();
-            if (!useDeterministicSampling_)
-            {
-                ss_->getPathSimplifier()->simplifyMax(p);
-                ss_->getPathSimplifier()->smoothBSpline(p);
-            }
-
-            return true;
-        }
 
         return false;
     }
@@ -199,7 +180,6 @@ int main(int argc, char ** argv)
 {
     std::cout << "OMPL version: " << OMPL_VERSION << std::endl;
 
-    //boost::filesystem::path path(TEST_RESOURCES_DIR);
     boost::filesystem::path* path;
     if(argc > 1){
         path = new boost::filesystem::path(argv[1]);
@@ -211,7 +191,6 @@ int main(int argc, char ** argv)
 
     Plane2DEnvironment env(path->string().c_str(), useDeterministicSampling);
 
-    //if (env.plan(516, 438, 1293, 1122))
     if (env.plan(516, 438, 500, 500))
     {
         env.recordSolution();
