@@ -1,4 +1,7 @@
-# multi_robot_path_planning
+# Dual Optimizing RRT* (DO-RRT*): A Simplistic Method for Improving Efficiency of Multi-Robot Tree Expansion
+
+Code for DO-RRT* optimal Multi-Robot path planning with setup for use in OMPL environment.
+
 
 This branch is for producing tree architecture file output and documentation
 Notion documentation site is bellow
